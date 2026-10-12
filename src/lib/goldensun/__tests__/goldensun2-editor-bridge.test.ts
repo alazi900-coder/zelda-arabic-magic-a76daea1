@@ -4,6 +4,8 @@ import {
   goldenSun2TechnicalTokens,
   normalizeGoldenSun2EmbeddedControls,
   stripUnexpectedGoldenSun2RawControls,
+  stripUnexpectedGoldenSun2InvisibleFormatting,
+  prepareGoldenSun2BuildText,
   validateGoldenSun2Translation,
   parseGoldenSun2Catalog,
   goldenSun2ToEditorEntries,
@@ -58,6 +60,33 @@ describe("The Lost Age shared editor protection", () => {
     expect(stripUnexpectedGoldenSun2RawControls(originalWithEsc,
       "نص" + esc + String.raw`\x1B\x03`))
       .toEqual({ text: "نص" + String.raw`\x1B\x03`, removed: 1 });
+  });
+
+  it("removes hidden ESC and RTL Unicode absent from the source using the same build rules", () => {
+    const source = String.raw`Hello\x03`;
+    const proposed = "Welcome" + String.fromCharCode(0x1b) + "\u200F\u2067\u200B" + String.raw`\x03`;
+    const cleaned = prepareGoldenSun2BuildText(source, proposed);
+    expect(cleaned).toMatchObject({
+      text: String.raw`Welcome\x03`,
+      removedHiddenControls: 1,
+      removedInvisibleFormatting: 3,
+      removedExtraTags: 0,
+      valid: true,
+    });
+    expect(proposed).toContain("\u200F");
+    expect(validateGoldenSun2Translation(source, cleaned.text).valid).toBe(true);
+  });
+
+  it("preserves an invisible character when it genuinely appears in the source", () => {
+    const src = "Alpha\u200F\u200D Omega";
+    const result = stripUnexpectedGoldenSun2InvisibleFormatting(src, "X\u200F\u200F\u200D");
+    expect(result).toEqual({ text: "X\u200F\u200D", removed: 1 });
+  });
+
+  it("never removes missing original technical control tags to hide a real problem", () => {
+    const result = prepareGoldenSun2BuildText(String.raw`Hello\x1B\x03`, String.raw`مرحبا\x03`);
+    expect(result.valid).toBe(false);
+    expect(result.removedHiddenControls).toBe(0);
   });
 
   it("imports explicit source rows into the same editor namespace", () => {

@@ -197,6 +197,7 @@ const EditorFiltersBar: React.FC<EditorFiltersBarProps> = ({
             {editor.deepDiagnosticCounts.newlineDiff > 0 && <option value="newline-diff">📄 فرق أسطر كبير ({editor.deepDiagnosticCounts.newlineDiff})</option>}
             {editor.deepDiagnosticCounts.breakMissing > 0 && <option value="break-missing">▼ ينقصه فاصل توقّف ({editor.deepDiagnosticCounts.breakMissing})</option>}
             {editor.deepDiagnosticCounts.identicalOriginal > 0 && <option value="identical-original">📋 ترجمة مطابقة للأصل ({editor.deepDiagnosticCounts.identicalOriginal})</option>}
+            {editor.deepDiagnosticCounts.gs2BuildIssues > 0 && <option value="gs2-build-issues">🛡️ Golden Sun II: رموز مخفية / مشاكل بناء ({editor.deepDiagnosticCounts.gs2BuildIssues})</option>}
             {isRisen && <option value="long-texts">📏 نصوص طويلة (35+)</option>}
             {isGtaIv && editor.gtaIvNeedsModCount > 0 && <option value="gtaiv-needs-mod">🎭 لم تُترجم في المود ({editor.gtaIvNeedsModCount})</option>}
             {isSteinsGate && editor.steinsGateUnsupportedCount > 0 && <option value="steinsgate-unsupported">🔤 حروف بلا خانة في الخط ({editor.steinsGateUnsupportedCount})</option>}
@@ -282,6 +283,7 @@ const EditorFiltersBar: React.FC<EditorFiltersBarProps> = ({
           {editor.deepDiagnosticCounts.newlineDiff > 0 && <option value="newline-diff">📄 فرق أسطر ({editor.deepDiagnosticCounts.newlineDiff})</option>}
           {editor.deepDiagnosticCounts.breakMissing > 0 && <option value="break-missing">▼ ينقصه فاصل توقّف ({editor.deepDiagnosticCounts.breakMissing})</option>}
           {editor.deepDiagnosticCounts.identicalOriginal > 0 && <option value="identical-original">📋 مطابقة للأصل ({editor.deepDiagnosticCounts.identicalOriginal})</option>}
+           {editor.deepDiagnosticCounts.gs2BuildIssues > 0 && <option value="gs2-build-issues">🛡️ Golden Sun II: رموز مخفية ({editor.deepDiagnosticCounts.gs2BuildIssues})</option>}
           {isRisen && <option value="long-texts">📏 نصوص طويلة (35+)</option>}
           {isGtaIv && editor.gtaIvNeedsModCount > 0 && <option value="gtaiv-needs-mod">🎭 لم تُترجم في المود ({editor.gtaIvNeedsModCount})</option>}
         </select>

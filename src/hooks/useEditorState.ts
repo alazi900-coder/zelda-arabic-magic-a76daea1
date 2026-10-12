@@ -60,6 +60,7 @@ import { categorizeCrashlandsEntry } from "@/lib/crashlands/crashlands-categorie
 import { categorizeInazumaEntry } from "@/lib/inazuma/inazuma-categories";
 import { categorizeGoldenSunEntry } from "@/lib/goldensun/goldensun-categories";
 import { analyzeGoldenSunUnsupportedCharacters, type GoldenSunUnsupportedCharacter } from "@/lib/goldensun/goldensun-rom";
+import { scanGoldenSun2BuildTranslations } from "@/lib/goldensun/goldensun2-build-scan";
 import { analyzeInazumaUnsupportedCharacters, type InazumaUnsupportedCharacter } from "@/lib/inazuma/inazuma-arabic-font";
 import { fromInazumaBreakTokens } from "@/lib/inazuma/inazuma-break-tokens";
 import { repairNinthDawnTags, validateNinthDawnTags } from "@/lib/ninthdawn/ninthdawn-tags";
@@ -1317,10 +1318,16 @@ export function useEditorState() {
   }, [state?.entries]);
   const gtaIvNeedsModCount = gtaIvNeedsModKeys.size;
 
+  // Golden Sun II: show the same exact problematic rows in the deep filter
+  // that will be encountered by the ROM builder (hidden Unicode included).
+  const gs2BuildIssueKeys = useMemo(() => new Set(
+    state ? scanGoldenSun2BuildTranslations(state.entries, state.translations).map(f => f.key) : [],
+  ), [state?.entries, state?.translations]);
+
   // === Deep diagnostic counts — uses shared predicates so the dropdown
   // badge count is GUARANTEED to match the filteredEntries length. ===
   const deepDiagnosticCounts = useMemo(() => {
-    const counts = { xenoNMissing: 0, excessiveLines: 0, byteBudget: 0, newlineDiff: 0, breakMissing: 0, identicalOriginal: 0 };
+    const counts = { xenoNMissing: 0, excessiveLines: 0, byteBudget: 0, newlineDiff: 0, breakMissing: 0, identicalOriginal: 0, gs2BuildIssues: gs2BuildIssueKeys.size };
     if (!state) return counts;
     for (const e of state.entries) {
       const key = `${e.msbtFile}:${e.index}`;
@@ -1334,7 +1341,7 @@ export function useEditorState() {
       if (deepDiagPredicates.identicalOriginal(e.original, translation)) counts.identicalOriginal++;
     }
     return counts;
-  }, [state?.entries, state?.translations]);
+  }, [state?.entries, state?.translations, gs2BuildIssueKeys]);
 
   // === Extract unique BDAT table and column names from labels ===
   const bdatTableNames = useMemo(() => {
@@ -1460,6 +1467,7 @@ export function useEditorState() {
         (filterStatus === "steinsgate-unsupported" && steinsGateUnsupportedFilterKeys.has(key)) ||
         (filterStatus === "inazuma-unsupported" && inazumaUnsupportedFilterKeys.has(key)) ||
         (filterStatus === "goldensun-unsupported" && goldenSunUnsupportedFilterKeys.has(key)) ||
+        (filterStatus === "gs2-build-issues" && gs2BuildIssueKeys.has(key)) ||
         (filterStatus === "crashlands-chinese" && crashlandsChineseKeys.has(key)) ||
         // Rows written entirely in capitals — move and ability names, menu
         // labels. Latin letters must be present and none may be lowercase; a
@@ -1489,7 +1497,7 @@ export function useEditorState() {
       const matchColumn = filterColumn === "all" || (labelMatch && labelMatch[3] === filterColumn);
       return matchSearch && matchFile && matchCategory && matchStatus && matchTechnical && matchTable && matchColumn && matchRisenOwner && matchRisenItemPrefix && matchRisenSection;
     });
-  }, [state, search, filterFile, filterCategory, filterStatus, filterTechnical, filterTable, filterColumn, filterRisenOwner, filterRisenItemPrefix, filterRisenSection, qualityStats.problemKeys, needsImprovement, isTranslationTooShort, isTranslationTooLong, hasStuckChars, isMixedLanguage, pinnedKeys, khbbsUnsupportedKeys, gtaIvUnsupportedKeys, gtaIvNeedsModKeys, platUnsupportedKeys, inazumaUnsupportedFilterKeys, goldenSunUnsupportedFilterKeys]);
+  }, [state, search, filterFile, filterCategory, filterStatus, filterTechnical, filterTable, filterColumn, filterRisenOwner, filterRisenItemPrefix, filterRisenSection, qualityStats.problemKeys, needsImprovement, isTranslationTooShort, isTranslationTooLong, hasStuckChars, isMixedLanguage, pinnedKeys, khbbsUnsupportedKeys, gtaIvUnsupportedKeys, gtaIvNeedsModKeys, platUnsupportedKeys, inazumaUnsupportedFilterKeys, goldenSunUnsupportedFilterKeys, gs2BuildIssueKeys]);
 
   useEffect(() => { setCurrentPage(0); clearReviewedKeys(); }, [search, filterFile, filterCategory, filterStatus, filterTechnical, filterTable, filterColumn, filterRisenOwner, filterRisenItemPrefix, filterRisenSection]);
 
@@ -1863,8 +1871,19 @@ export function useEditorState() {
       original: e.original,
     }));
     const report = scanTranslationsForRestore(entriesForScan, state.translations);
-    setRestoreReport(report);
-    if (report.autoFixable === 0 && report.needsReview === 0) {
+    const gs2Findings = scanGoldenSun2BuildTranslations(state.entries, state.translations);
+    if (gs2Findings.length) {
+      setSmartReviewFindings(gs2Findings.map(f => ({
+        key: f.key, original: f.original, current: f.current,
+        type: "inconsistency" as const, issue: f.issue, fix: f.fix,
+      })));
+      toast({
+        title: "⚠️ فحص Golden Sun II وجد " + gs2Findings.length + " مشكلة بناء",
+        description: "تظهر النصوص المتأثرة في لوحة المراجعة، ويمكن تطبيق تنظيف الرموز المخفية الزائدة دون تغيير الوسوم الأصلية.",
+      });
+    }
+    setRestoreReport(report.autoFixable === 0 && report.needsReview === 0 && gs2Findings.length ? null : report);
+    if (report.autoFixable === 0 && report.needsReview === 0 && gs2Findings.length === 0) {
       toast({
         title: "✅ كلّ الترجمات سليمة",
         description: `تمّ فحص ${report.scanned} ترجمة — لا توجد رموز مفقودة ولا فواصل أسطر ناقصة.`,

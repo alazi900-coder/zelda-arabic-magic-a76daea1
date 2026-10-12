@@ -11,7 +11,7 @@
  */
 import { reshapeArabic, stripDiacritics } from "@/lib/arabic-processing";
 import { buildTrees, compressString, decompressString } from "./goldensun-huffman";
-import { normalizeGoldenSun2EmbeddedControls, stripUnexpectedGoldenSun2RawControls, stripSurplusGoldenSun2ExplicitControls, validateGoldenSun2Translation } from "./goldensun2-editor-bridge";
+import { normalizeGoldenSun2EmbeddedControls, prepareGoldenSun2BuildText, validateGoldenSun2Translation } from "./goldensun2-editor-bridge";
 import { tokenizeGoldenSunBytes, isGoldenSunPlainAscii } from "./goldensun-tags";
 import { GOLDENSUN_ARABIC_BYTE_MAP } from "./goldensun-arabic-font";
 
@@ -339,6 +339,7 @@ export interface GoldenSun2BuildResult {
   translatedLines: number;
   fontReady: boolean;
   removedHiddenControls: number;
+  removedInvisibleFormatting: number;
   removedExtraControlTags: number;
   omittedUnsupportedCharacters: number;
   skippedUnsafeTranslations: number;
@@ -354,10 +355,11 @@ export function buildGoldenSun2StringTable(
   const forceBuild = options.forceBuild === true;
   let translatedLines = 0;
   let removedHiddenControls = 0;
+  let removedInvisibleFormatting = 0;
   let removedExtraControlTags = 0;
   let omittedUnsupportedCharacters = 0;
   const skippedIndexes: number[] = [];
-  const appliedEffects = new Map<number, { hidden: number; extra: number; unsupported: number }>();
+  const appliedEffects = new Map<number, { hidden: number; invisible: number; extra: number; unsupported: number }>();
   const fontReady = isGoldenSun2ArabicFontRom(rom);
   const contents = originals.map((raw, index) => {
     const original = goldenSun2BytesToText(raw, fontReady);
@@ -365,19 +367,13 @@ export function buildGoldenSun2StringTable(
     const changed = translations[key];
     if (!changed || changed === original) return raw;
 
-    // This source-aware cleanup is safe in either build mode: real invisible
-    // controls absent from the original cannot become in-game commands.
-    const sanitized = stripUnexpectedGoldenSun2RawControls(original, changed);
-    const withoutRawControls = normalizeGoldenSun2EmbeddedControls(sanitized.text);
-    // In forced mode also remove EXTRA textual \x1B-like controls. Required
-    // original controls remain protected and verified in original order.
-    const explicitCleanup = forceBuild
-      ? stripSurplusGoldenSun2ExplicitControls(original, withoutRawControls)
-      : { text: withoutRawControls, removed: 0 };
-    const normalizedChanged = explicitCleanup.text;
+    // This is the SAME source-aware sanitizer used by Golden Sun II's
+    // local deep scan: remove surplus invisible Unicode, not game controls.
+    const prepared = prepareGoldenSun2BuildText(original, changed, forceBuild);
+    const normalizedChanged = prepared.text;
     const skipUnsafe = () => { skippedIndexes.push(index); return raw; };
 
-    if (!validateGoldenSun2Translation(original, normalizedChanged).valid) {
+    if (!prepared.valid) {
       if (forceBuild) return skipUnsafe();
       throw new Error("GS2: technical control codes differ from the original at text #" + index);
     }
@@ -411,18 +407,20 @@ export function buildGoldenSun2StringTable(
     }
     // Dialogue width / two-line auto-wrap gate is disabled in ALL build modes.
     // Force mode does not bypass technical token safety or Huffman integrity.
-    removedHiddenControls += sanitized.removed;
-    removedExtraControlTags += explicitCleanup.removed;
+    removedHiddenControls += prepared.removedHiddenControls;
+    removedInvisibleFormatting += prepared.removedInvisibleFormatting;
+    removedExtraControlTags += prepared.removedExtraTags;
     omittedUnsupportedCharacters += unsupported;
     appliedEffects.set(index, {
-      hidden: sanitized.removed, extra: explicitCleanup.removed, unsupported,
+      hidden: prepared.removedHiddenControls, invisible: prepared.removedInvisibleFormatting,
+      extra: prepared.removedExtraTags, unsupported,
     });
     translatedLines++;
     return bytes;
   });
   if (!translatedLines) return {
     rom: rom.slice(), translatedLines: 0, fontReady, removedHiddenControls: 0,
-    removedExtraControlTags: 0, omittedUnsupportedCharacters: 0,
+    removedInvisibleFormatting: 0, removedExtraControlTags: 0, omittedUnsupportedCharacters: 0,
     skippedUnsafeTranslations: skippedIndexes.length, skippedIndexes,
   };
 
@@ -469,6 +467,7 @@ export function buildGoldenSun2StringTable(
       const effect = appliedEffects.get(i);
       if (effect) {
         removedHiddenControls -= effect.hidden;
+        removedInvisibleFormatting -= effect.invisible;
         removedExtraControlTags -= effect.extra;
         omittedUnsupportedCharacters -= effect.unsupported;
         appliedEffects.delete(i);
@@ -476,7 +475,7 @@ export function buildGoldenSun2StringTable(
     }
     if (translatedLines === 0) return {
       rom: rom.slice(), translatedLines, fontReady, removedHiddenControls,
-      removedExtraControlTags, omittedUnsupportedCharacters,
+      removedInvisibleFormatting, removedExtraControlTags, omittedUnsupportedCharacters,
       skippedUnsafeTranslations: skippedIndexes.length, skippedIndexes,
     };
     packed = compressCurrent();
@@ -544,7 +543,7 @@ export function buildGoldenSun2StringTable(
     }
   }
   return {
-    rom: rebuilt, translatedLines, fontReady, removedHiddenControls,
+    rom: rebuilt, translatedLines, fontReady, removedHiddenControls, removedInvisibleFormatting,
     removedExtraControlTags, omittedUnsupportedCharacters,
     skippedUnsafeTranslations: skippedIndexes.length, skippedIndexes,
   };

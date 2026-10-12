@@ -4,6 +4,7 @@ import { resolveGameParam } from "@/lib/game-param";
 import { hasArabicPresentationForms, removeArabicPresentationForms } from "@/lib/arabic-processing";
 import { mergeGuardedTranslations } from "@/lib/risen-write-guard";
 import { validatePokemonXpTechnicalTokens } from "@/lib/pokemon-xp/pokemon-xp-rules";
+import { scanGoldenSun2BuildTranslations } from "@/lib/goldensun/goldensun2-build-scan";
 import type {
   EditorState, ExtractedEntry,
   ReviewResults, ShortSuggestion, ImproveResult,
@@ -287,11 +288,24 @@ export function useEditorReview(params: UseEditorReviewParams) {
     setSmartReviewing(true);
     setSmartReviewFindings(null);
     toast({ title: "🔬 بدأت المراجعة الذكية", description: "تحليل عميق للترجمات في الخلفية..." });
+    // Game-specific ROM preflight is deterministic and must never depend on
+    // AI guesses. Scan ALL translated Golden Sun II rows (including previously
+    // reviewed rows), before making a network request.
+    const gs2BuildFindings: SmartReviewFinding[] = scanGoldenSun2BuildTranslations(
+      state.entries, state.translations,
+    ).map(f => ({
+      key: f.key, original: f.original, current: f.current,
+      type: 'inconsistency' as const, issue: f.issue, fix: f.fix,
+    }));
+    if (gs2BuildFindings.length) setSmartReviewFindings(gs2BuildFindings);
     try {
       const reviewEntries = filteredEntries
         .filter(e => { const key = `${e.msbtFile}:${e.index}`; return state.translations[key]?.trim() && !reviewedKeysRef.current.has(key); })
         .map(e => ({ key: `${e.msbtFile}:${e.index}`, original: e.original, translation: state.translations[`${e.msbtFile}:${e.index}`], maxBytes: e.maxBytes || 0 }));
-      if (reviewEntries.length === 0) { toast({ title: "لا توجد ترجمات للمراجعة" }); return; }
+      if (reviewEntries.length === 0) {
+        toast({ title: gs2BuildFindings.length ? `كشف الفحص المحلي ${gs2BuildFindings.length} مشكلة في بناء Golden Sun II` : "لا توجد ترجمات للمراجعة" });
+        return;
+      }
       setTranslateProgress(`🔬 جاري المراجعة الذكية العميقة (${reviewEntries.length} نص)...`);
       const response = await fetch(getEdgeFunctionUrl("review-translations"), {
         method: 'POST',
@@ -300,13 +314,19 @@ export function useEditorReview(params: UseEditorReviewParams) {
       });
       if (!response.ok) { const errData = await response.json().catch(() => ({})); throw new Error(errData.error || `خطأ ${response.status}`); }
       const data = await response.json();
-      setSmartReviewFindings(data.findings || []);
-      const count = data.findings?.length || 0;
-      setTranslateProgress(count > 0 ? `🔬 تم العثور على ${count} مشكلة` : `✅ لم يتم العثور على مشاكل!`);
+      const fromAI: SmartReviewFinding[] = Array.isArray(data.findings) ? data.findings : [];
+      const localKeys = new Set(gs2BuildFindings.map(f => f.key));
+      const combinedFindings = [...gs2BuildFindings, ...fromAI.filter(f => !localKeys.has(f.key))];
+      setSmartReviewFindings(combinedFindings);
+      const count = combinedFindings.length;
+      setTranslateProgress(count > 0 ? `🔬 تم العثور على ${count} مشكلة (تشمل فحص سلامة بناء الروم)` : `✅ لم يتم العثور على مشاكل!`);
       setTimeout(() => setTranslateProgress(""), 4000);
     } catch (err) {
       toast({ title: "خطأ في المراجعة الذكية", description: err instanceof Error ? err.message : 'غير معروف', variant: "destructive" });
-      setTranslateProgress("");
+      if (gs2BuildFindings.length) {
+        setSmartReviewFindings(gs2BuildFindings);
+        setTranslateProgress(`🔬 فحص ROM المحلي وجد ${gs2BuildFindings.length} مشكلة، وتعذّر إكمال فحص AI.`);
+      } else setTranslateProgress("");
     } finally { setSmartReviewing(false); }
   };
 

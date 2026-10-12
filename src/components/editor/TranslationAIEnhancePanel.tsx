@@ -816,8 +816,10 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
     const isGmiCloudActive = effectiveProvider === 'gmicloud';
     // MiniMax may temporarily reject large parallel bursts; use small serial batches
     // and let its direct-only transport retry only the same GMI Cloud model.
-    const effectiveBatchSize = isTokenRouterActive ? TOKENROUTER_BATCH_SIZE : isGmiCloudActive ? 4 : BATCH_SIZE;
-    const effectiveParallel = isTokenRouterActive ? TOKENROUTER_PARALLEL : isGmiCloudActive ? 1 : PARALLEL_REQUESTS;
+    // البريهي بطيء (~90 ث لسطر واحد) فالدفعات الكبيرة تتجاوز حدّ الخادم وتنقطع بصمت.
+    const isAlborihiActive = effectiveProvider === 'alborihi';
+    const effectiveBatchSize = isTokenRouterActive || isAlborihiActive ? TOKENROUTER_BATCH_SIZE : isGmiCloudActive ? 4 : BATCH_SIZE;
+    const effectiveParallel = isTokenRouterActive ? TOKENROUTER_PARALLEL : isGmiCloudActive || isAlborihiActive ? 1 : PARALLEL_REQUESTS;
     const batches: { textsToAnalyze: { key: string; original: string; translation: string; category?: string }[] }[] = [];
     for (let i = 0; i < cacheMissEntries.length; i += effectiveBatchSize) {
       batches.push({ textsToAnalyze: cacheMissEntries.slice(i, i + effectiveBatchSize) });

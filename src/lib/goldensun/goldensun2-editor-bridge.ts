@@ -38,16 +38,59 @@ const WRONG_ESCAPE = /\\x(?![0-9a-fA-F]{2})/i;
 const WRONG_GS2 = /\{GS2:(?![0-9A-Fa-f]{2,8}\})/i;
 
 /**
- * Imported JSON or AI output can contain REAL ASCII control characters such
- * as ESC (U+001B), rather than their editor spelling \\x1B. Treat them as
- * game bytes only if the original record contains that very control code in
- * the same sequence. Never quietly delete or insert a technical byte.
- * Actual newlines/tabs and NUL are intentionally NOT auto-converted.
+ * Imported JSON or AI output may contain actual ASCII C0 controls such as
+ * U+001B (ESC) instead of the editor spelling \x1B. Encode only controls
+ * actually required by the game's source; stray invisible controls inserted
+ * by an AI are not part of the translation and must not block ROM building.
+ * Newlines, tabs and NUL are excluded from this normalization.
  */
+const GS2_RAW_EMBEDDED_CONTROL_RE = /[\u0001-\u0008\u000B\u000C\u000E-\u001F]/g;
+
 export function normalizeGoldenSun2EmbeddedControls(text: string): string {
-  return text.replace(/[\u0001-\u0008\u000B\u000C\u000E-\u001F]/g, char =>
+  return text.replace(GS2_RAW_EMBEDDED_CONTROL_RE, char =>
     "\\x" + char.charCodeAt(0).toString(16).toUpperCase().padStart(2, "0")
   );
+}
+
+/**
+ * Remove ONLY real invisible C0 characters which would add an unexpected
+ * technical token. Preserve required originals, including their multiplicity.
+ * Explicit readable \xNN tags are NEVER removed: if changed, the existing
+ * token validator still rejects the translation.
+ *
+ * This does not modify the editor's saved text; the ROM builder cleans the
+ * outgoing copy and reports how many unexpected controls were omitted.
+ */
+export function stripUnexpectedGoldenSun2RawControls(
+  source: string,
+  translation: string,
+): { text: string; removed: number } {
+  const expected = new Map<string, number>();
+  for (const token of goldenSun2TechnicalTokens(source)) {
+    if (!/^\\x(?:0[1-8BC]|1[0-9A-F])$/i.test(token)) continue;
+    const code = token.slice(-2).toUpperCase();
+    expected.set(code, (expected.get(code) ?? 0) + 1);
+  }
+
+  // Literal textual \xNN controls already occupy their required source slots.
+  // A duplicate invisible character alongside a correct tag is expendable.
+  const used = new Map<string, number>();
+  for (const match of translation.matchAll(/\\x([0-9a-fA-F]{2})/g)) {
+    const code = match[1].toUpperCase();
+    used.set(code, (used.get(code) ?? 0) + 1);
+  }
+  let removed = 0;
+  const text = translation.replace(GS2_RAW_EMBEDDED_CONTROL_RE, char => {
+    const code = char.charCodeAt(0).toString(16).toUpperCase().padStart(2, "0");
+    const count = used.get(code) ?? 0;
+    if (count < (expected.get(code) ?? 0)) {
+      used.set(code, count + 1);
+      return char;
+    }
+    removed++;
+    return "";
+  });
+  return { text, removed };
 }
 
 export function goldenSun2TechnicalTokens(text: string): string[] {

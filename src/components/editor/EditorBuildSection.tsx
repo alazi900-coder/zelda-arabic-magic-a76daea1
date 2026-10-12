@@ -806,7 +806,7 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
         await editor.forceSave();
         const buffer = await idbGet<ArrayBuffer>(GOLDENSUN2_BUFFER_KEY);
         if (!buffer) throw new Error("ROM الجزء الثاني غير محفوظة — ارفعها من صفحة Golden Sun");
-        const { rom, translatedLines, fontReady } = buildGoldenSun2StringTable(
+        const { rom, translatedLines, fontReady, removedHiddenControls } = buildGoldenSun2StringTable(
           new Uint8Array(buffer), editor.state?.translations || {}
         );
         const blob = new Blob([rom as unknown as ArrayBuffer], { type: "application/octet-stream" });
@@ -820,6 +820,10 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
           ? "تم بناء AGFE: " + translatedLines +
               " نصًا مترجمًا؛ كُتبت الحوارات كما هي دون فحص أو تعديل عدد الأسطر أو عرضها، ونجح التحقق من البيانات بعد الضغط."
           : "لم توجد ترجمات جديدة — ROM المنزّلة مطابقة للمدخلة.");
+        if (removedHiddenControls > 0) sonnerToast.info(
+          "تنظيف رموز تحكم مخفية زائدة",
+          { description: "أُزيل " + removedHiddenControls + " رمز تحكم غير موجود في النصوص الأصلية من نسخة ROM فقط. ترجمات المحرر المحفوظة لم تتغير." }
+        );
         if (!fontReady) sonnerToast.warning("النسخة المبنية بلا خط عربي/RTL؛ لتظهر الحروف العربية استخدم ROM ذات رقعة الخط المتوافقة.");
         return;
       }

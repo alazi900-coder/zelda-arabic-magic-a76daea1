@@ -3,6 +3,7 @@ import {
   GOLDENSUN2_FILE,
   goldenSun2TechnicalTokens,
   normalizeGoldenSun2EmbeddedControls,
+  stripUnexpectedGoldenSun2RawControls,
   validateGoldenSun2Translation,
   parseGoldenSun2Catalog,
   goldenSun2ToEditorEntries,
@@ -40,6 +41,23 @@ describe("The Lost Age shared editor protection", () => {
     expect(validateGoldenSun2Translation(
       String.raw`Hello\x03`, "أهلا" + rawEsc + String.raw`\x03`
     ).valid).toBe(false);
+  });
+
+  it("strips an added U+001B but leaves the game's own controls unchanged", () => {
+    const esc = String.fromCharCode(0x1b);
+    const source = String.raw`Hello\x03`;
+    const added = "مرحبا" + esc + String.raw`\x03`;
+    const clean = stripUnexpectedGoldenSun2RawControls(source, added);
+    expect(clean).toEqual({ text: String.raw`مرحبا\x03`, removed: 1 });
+    expect(validateGoldenSun2Translation(source, clean.text).valid).toBe(true);
+    expect(added).toContain(esc);
+
+    const originalWithEsc = String.raw`Hello\x1B\x03`;
+    expect(stripUnexpectedGoldenSun2RawControls(originalWithEsc, "نص" + esc + String.raw`\x03`))
+      .toEqual({ text: "نص" + esc + String.raw`\x03`, removed: 0 });
+    expect(stripUnexpectedGoldenSun2RawControls(originalWithEsc,
+      "نص" + esc + String.raw`\x1B\x03`))
+      .toEqual({ text: "نص" + String.raw`\x1B\x03`, removed: 1 });
   });
 
   it("imports explicit source rows into the same editor namespace", () => {

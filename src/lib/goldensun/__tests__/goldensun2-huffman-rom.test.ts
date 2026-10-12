@@ -256,7 +256,7 @@ describe("The Lost Age complete extraction and rebuild", () => {
     const rom = makeFixture();
     const key9 = GS2_TEXT_FILE + ":9";
     const key10 = GS2_TEXT_FILE + ":10";
-    const veryLong = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 ".repeat(100) + "\\x03";
+    const veryLong = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 ".repeat(45) + "\\x03";
     expect(() => buildGoldenSun2StringTable(rom, { [key9]: veryLong }))
       .toThrow(/حجمه بعد الضغط/);
     const built = buildGoldenSun2StringTable(rom, {
@@ -268,6 +268,18 @@ describe("The Lost Age complete extraction and rebuild", () => {
     const extracted = extractGoldenSun2Strings(built.rom);
     expect(extracted[9].original).toBe(String.raw`B\x03`);
     expect(extracted[10].original).toBe(String.raw`Working\x03`);
+  }, 60000);
+
+  it("forced build skips an uncompressible-to-decode 2000-byte text without breaking the ROM", () => {
+    const rom = makeFixture();
+    const veryLong = "abcdefghijklmnopqrstuvwxyz0123456789 ".repeat(70) + "\\x03";
+    const key = GS2_TEXT_FILE + ":9";
+    expect(() => buildGoldenSun2StringTable(rom, { [key]: veryLong }))
+      .toThrow(/1999/);
+    const forced = buildGoldenSun2StringTable(rom, { [key]: veryLong }, { forceBuild: true });
+    expect(forced.skippedUnsafeTranslations).toBe(1);
+    expect(forced.translatedLines).toBe(0);
+    expect(forced.rom.length).toBe(rom.length);
   }, 60000);
 
   it("refuses broken control tags and Arabic without the game's patched font", () => {

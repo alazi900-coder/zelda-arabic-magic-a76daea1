@@ -99,6 +99,53 @@ export function stripUnexpectedGoldenSun2RawControls(
  * control. Any remaining missing or reordered tokens will still be rejected
  * by validateGoldenSun2Translation, then that specific source row is kept.
  */
+/**
+ * Formatting/invisible Unicode has no glyph or command in the AGFE text
+ * stream. Remove only occurrences exceeding the original source count.
+ * Never change explicit \xNN tags (those are handled separately).
+ */
+const GS2_INVISIBLE_FORMAT_RE = /[\u00AD\u034F\u061C\u180E\u200B-\u200F\u202A-\u202E\u2060-\u206F\uFEFF]/g;
+
+export function stripUnexpectedGoldenSun2InvisibleFormatting(
+  source: string, translation: string,
+): { text: string; removed: number } {
+  const expected = new Map<string, number>();
+  for (const char of source.match(GS2_INVISIBLE_FORMAT_RE) || []) {
+    expected.set(char, (expected.get(char) || 0) + 1);
+  }
+  const used = new Map<string, number>();
+  let removed = 0;
+  const text = translation.replace(GS2_INVISIBLE_FORMAT_RE, char => {
+    const count = used.get(char) || 0;
+    if (count < (expected.get(char) || 0)) {
+      used.set(char, count + 1);
+      return char;
+    }
+    removed++;
+    return "";
+  });
+  return { text, removed };
+}
+
+/** Single normalization path shared by the ROM builder and local deep scan. */
+export function prepareGoldenSun2BuildText(
+  source: string, translation: string, forceBuild = false,
+): { text: string; removedHiddenControls: number; removedInvisibleFormatting: number; removedExtraTags: number; valid: boolean } {
+  const raw = stripUnexpectedGoldenSun2RawControls(source, translation);
+  const invisible = stripUnexpectedGoldenSun2InvisibleFormatting(source, raw.text);
+  const normalized = normalizeGoldenSun2EmbeddedControls(invisible.text);
+  const extra = forceBuild
+    ? stripSurplusGoldenSun2ExplicitControls(source, normalized)
+    : { text: normalized, removed: 0 };
+  return {
+    text: extra.text,
+    removedHiddenControls: raw.removed,
+    removedInvisibleFormatting: invisible.removed,
+    removedExtraTags: extra.removed,
+    valid: validateGoldenSun2Translation(source, extra.text).valid,
+  };
+}
+
 export function stripSurplusGoldenSun2ExplicitControls(
   source: string, translation: string,
 ): { text: string; removed: number } {

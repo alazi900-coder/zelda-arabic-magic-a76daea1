@@ -181,6 +181,18 @@ describe("The Lost Age complete extraction and rebuild", () => {
     expect(extractGoldenSun2Strings(built.rom)[8].original).toBe(String.raw`A\x03`);
   }, 60000);
 
+  it("builds a translated ROM after removing only surplus RTL-format Unicode", () => {
+    const rom = makeFixture();
+    const key = GS2_TEXT_FILE + ":9";
+    const proposed = "Welcome\u200F\u2067" + String.raw`\x03`;
+    const built = buildGoldenSun2StringTable(rom, { [key]: proposed });
+    expect(built.translatedLines).toBe(1);
+    expect(built.removedInvisibleFormatting).toBe(2);
+    expect(built.removedHiddenControls).toBe(0);
+    expect(extractGoldenSun2Strings(built.rom)[9].original).toBe(String.raw`Welcome\x03`);
+    expect(proposed).toContain("\u200F");
+  }, 60000);
+
   it("removes duplicates but retains an actual original ESC command", () => {
     const rom = makeFixture({ 9: [0x41, 0x1b, 0x03] });
     const esc = String.fromCharCode(0x1b);

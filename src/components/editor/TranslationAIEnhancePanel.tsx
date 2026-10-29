@@ -1054,18 +1054,18 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
           }
           setProcessedCount(processedKeysRef.current.size);
           await storeCacheForBatch(expanded.allTexts.filter(t => !failedKeySet.has(t.key)), expanded.data);
-          return { data: expanded.data, count: expanded.allTexts.length };
+          return { data: expanded.data, count: expanded.allTexts.length - failedKeySet.size };
         } catch (err) {
           const errStr = String(err);
           // إذا المستخدم ضغط إيقاف تجاهل الخطأ بصمت (لا تعرض توست ولا تعيد المحاولة).
           if (abortSignal.aborted || (err instanceof Error && err.name === 'AbortError') || errStr.includes('AbortError') || errStr.includes('aborted')) {
-            return { data: null, count: textsToAnalyze.length };
+            return { data: null, count: 0 };
           }
           if (!isCerebrasActive && errStr.includes('429')) {
             toast({ title: "تم تجاوز حد الطلبات، جاري الانتظار...", variant: "destructive" });
             try { await waitForReviewCooldown(5_000, abortSignal); }
             catch { return { data: null, count: 0 }; }
-            if (abortSignal.aborted) return { data: null, count: textsToAnalyze.length };
+            if (abortSignal.aborted) return { data: null, count: 0 };
             try {
               const { data, error: retryError } = await invokeWithQuotaRecovery(textsToAnalyze);
               if (retryError) throw retryError;
@@ -1088,7 +1088,7 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
                 }
                 setProcessedCount(processedKeysRef.current.size);
                 await storeCacheForBatch(expanded.allTexts.filter(t => !failedKeySet.has(t.key)), expanded.data);
-                return { data: expanded.data, count: expanded.allTexts.length };
+                return { data: expanded.data, count: expanded.allTexts.length - failedKeySet.size };
               }
             } catch (retryErr) {
               const msg = `فشل بعد إعادة المحاولة: ${String(retryErr).slice(0, 200)}`;

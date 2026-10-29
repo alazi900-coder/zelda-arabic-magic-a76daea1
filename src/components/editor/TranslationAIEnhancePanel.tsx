@@ -24,7 +24,7 @@ import {
   Sparkles, Loader2, Check, X, AlertTriangle, BookOpen, Wand2, Square,
   RotateCcw, Type, Search, Zap, Eye, Copy, ArrowRight, Filter, Download,
   Pencil, Undo2, ChevronDown, ChevronUp, FileText, Trash2, Upload,
-  FolderOpen, Shield, Wifi,
+  FolderOpen, Shield, Wifi, Play,
 } from "lucide-react";
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
 import { supabase } from "@/integrations/supabase/client";
@@ -39,6 +39,7 @@ import { backTranslateBatch, wordsJaccard, orderOverlap, isOrderComparable } fro
 import { isTranslationExcludedText, type ExtractedEntry } from "./types";
 import { EnhanceRulesDialog } from "./EnhanceRulesDialog";
 import { explainEnhancementProviderError, isEnhancementBillingError } from "@/lib/enhance-provider-error";
+import { DEFAULT_ENHANCE_SCAN_LIMIT, selectEnhanceScanRound, type EnhanceScanLimit } from "@/lib/enhance-scan-round";
 import {
   getActiveEnhancementRules, buildActiveEnhancementInstructions,
   filterDirectEnhancementFindings,
@@ -355,6 +356,12 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
   const [severityFilter, setSeverityFilter] = useState<string | null>(null);
   const [categoryFilter, setCategoryFilter] = useState<GrammarCategory | null>(null);
   const [processedCount, setProcessedCount] = useState(0);
+  const [lastRunMode, setLastRunMode] = useState<"enhance" | "grammar" | "combined">("combined");
+  const [scanLimit, setScanLimit] = useState<EnhanceScanLimit>(() => {
+    const saved = readLocalStorage("enhanceScanLimit");
+    return saved === "all" ? "all" : saved === "100" ? 100 : saved === "300" ? 300 : DEFAULT_ENHANCE_SCAN_LIMIT;
+  });
+  useEffect(() => { try { localStorage.setItem("enhanceScanLimit", String(scanLimit)); } catch { /* private mode */ } }, [scanLimit]);
   const [searchQuery, setSearchQuery] = useState("");
   const [scope, setScope] = useState<Scope>("all");
   const [model, setModel] = useState<string>(() => {
@@ -434,6 +441,8 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
   const abortControllerRef = useRef<AbortController | null>(null);
   /** يمنع تكرار تنبيه التحويل التلقائي لـ Gemini أكثر من مرة واحدة لكل عملية فحص. */
   const fallbackNoticeShownRef = useRef(false);
+  /** Switch to results only once for each run; user can then choose another tab. */
+  const autoOpenedResultsRef = useRef(false);
   /** Maps key → translation text at the time of last scan. */
   const processedKeysRef = useRef<Map<string, string>>(new Map());
 
@@ -502,11 +511,14 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
       setGrammarIssues(prev => prev.filter(g => !changedKeys.has(g.key)));
     }
 
-    const translatedEntries = entries.filter(e => {
+    const eligibleEntries = entries.filter(e => {
       const key = `${e.msbtFile}:${e.index}`;
       const t = translations[key];
       return t?.trim() && !isTranslationExcludedText(e.original, e.msbtFile) && !processedKeysRef.current.has(key) && scopeFilter(e, t);
     });
+    // Default to a predictable, reviewable round. A user may explicitly choose
+    // "all" for an uninterrupted scan; otherwise Stop/Continue is responsive.
+    const translatedEntries = selectEnhanceScanRound(eligibleEntries, scanLimit);
 
     if (translatedEntries.length === 0) {
       toast({
@@ -518,6 +530,8 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
       return;
     }
 
+    setLastRunMode(mode);
+    autoOpenedResultsRef.current = false;
     setIsAnalyzing(true);
     setLastError(null); // امسح خطأ التشغيل السابق عند بدء تشغيل جديد.
     setStatusMessage(null);
@@ -740,6 +754,13 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
           setGrammarIssues(prev => [...prev, ...newIssues]);
         }
       }
+      // Show the first real findings immediately rather than hiding them behind
+      // "الفحص" until all entries have finished.
+      if (!autoOpenedResultsRef.current && allSuggestions.length + allIssues.length > 0) {
+        autoOpenedResultsRef.current = true;
+        setActiveTab(allIssues.length > 0 ? "grammar" : "enhance");
+        setWorkspaceTab("results");
+      }
     };
 
     const currentProvider = translationProvider || readLocalStorage('translationProvider') || 'gemini';
@@ -920,20 +941,16 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
         }
         return { data: filtered, error: null };
       }
-      if (!isTokenRouterActive) {
-        return supabase.functions.invoke('enhance-translations', {
-          body: buildRequestBody(textsToAnalyze),
-          signal: abortSignal,
-        });
-      }
-
+      // All Edge providers need an explicit per-request timeout; otherwise a
+      // stalled function leaves the mobile UI spinning without a result.
+      const requestTimeoutMs = isTokenRouterActive ? TOKENROUTER_CLIENT_TIMEOUT_MS : 90_000;
       const timeoutController = new AbortController();
       let didTimeout = false;
       const onAbort = () => timeoutController.abort();
       const timeoutId = window.setTimeout(() => {
         didTimeout = true;
         timeoutController.abort();
-      }, TOKENROUTER_CLIENT_TIMEOUT_MS);
+      }, requestTimeoutMs);
       abortSignal.addEventListener('abort', onAbort, { once: true });
 
       try {
@@ -942,8 +959,8 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
           signal: timeoutController.signal,
         });
       } catch (err) {
-        if (didTimeout) {
-          throw new Error(`انتهت مهلة GLM/TokenRouter بعد ${Math.round(TOKENROUTER_CLIENT_TIMEOUT_MS / 1000)} ثانية — قلّلت الأداة حجم الدفعات إلى نصّين، جرّب مرة أخرى أو افحص نطاقاً أصغر`);
+        if (didTimeout && !abortSignal.aborted) {
+          throw new Error(`انتهت مهلة فحص الدفعة بعد ${Math.round(requestTimeoutMs / 1000)} ثانية. يمكن متابعة النصوص غير المفحوصة أو اختيار نطاق أصغر. التفاصيل: ${String(err).slice(0, 120)}`);
         }
         throw err;
       } finally {
@@ -1101,6 +1118,8 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
     const enhanceCount = allSuggestions.length;
     const grammarCount = allIssues.length;
     const total = mode === "enhance" ? enhanceCount : mode === "grammar" ? grammarCount : enhanceCount + grammarCount;
+    const stillPending = Math.max(0, eligibleEntries.length - processed);
+    const continuationNote = stillPending > 0 ? ` — تبقّى ${stillPending} نصًا؛ استخدم «متابعة الفحص» لبدء الدفعة التالية` : "";
     const failedNote = failedKeysTotal.size > 0
       ? ` — تعذّر تحليل ${failedKeysTotal.size} نص (رد الذكاء الاصطناعي انقطع)، سيُعاد فحصها تلقائياً في المحاولة القادمة`
       : "";
@@ -1109,11 +1128,11 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
     }
     if (total === 0 && !abortRef.current) {
       const emptyTitle = mode === "enhance" ? "✅ الترجمات جيدة" : mode === "grammar" ? "✅ لا توجد أخطاء" : "✅ الترجمات سليمة قواعديّاً وأسلوبيّاً";
-      toast({ title: emptyTitle, description: failedNote || undefined });
+      toast({ title: stillPending > 0 ? "اكتملت دفعة الفحص، ويمكن المتابعة" : emptyTitle, description: (continuationNote + failedNote) || undefined });
     } else if (mode === "combined") {
-      toast({ title: `تم العثور على ${grammarCount} خطأ + ${enhanceCount} اقتراح`, description: failedNote || undefined });
+      toast({ title: `تم العثور على ${grammarCount} خطأ + ${enhanceCount} اقتراح`, description: (continuationNote + failedNote) || undefined });
     } else {
-      toast({ title: `تم العثور على ${total} ${mode === "enhance" ? "اقتراح" : "خطأ"}`, description: failedNote || undefined });
+      toast({ title: `تم العثور على ${total} ${mode === "enhance" ? "اقتراح" : "خطأ"}`, description: (continuationNote + failedNote) || undefined });
     }
   };
 
@@ -1905,6 +1924,18 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
                   </SelectContent>
                 </Select>
               </div>
+              <div>
+                <label className="text-[10px] text-muted-foreground mb-1 block">عدد النصوص في كل جولة</label>
+                <Select value={String(scanLimit)} onValueChange={(value) => setScanLimit(value === "all" ? "all" : Number(value) as 100 | 150 | 300)}>
+                  <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="100" className="text-xs">100 نص — تجربة سريعة</SelectItem>
+                    <SelectItem value="150" className="text-xs">150 نص — افتراضي</SelectItem>
+                    <SelectItem value="300" className="text-xs">300 نص — جولة أطول</SelectItem>
+                    <SelectItem value="all" className="text-xs">جميع النصوص (قد يستغرق طويلًا)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
             {model.startsWith('deepseek') && (
               <label className="flex items-center gap-2 text-xs cursor-pointer pt-1" dir="rtl">
@@ -2031,6 +2062,11 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
             controls appear only on their corresponding workspace. */}
         {(workspaceTab === "scan" || workspaceTab === "results" || isAnalyzing) && (
         <div className="flex items-center gap-2 flex-wrap">
+          {!isAnalyzing && remaining > 0 && processedCount > 0 && (
+            <Button variant="default" size="sm" onClick={() => analyzeTranslations(lastRunMode)} className="gap-1.5">
+              <Play className="w-3.5 h-3.5" /> متابعة الفحص ({remaining} متبقي)
+            </Button>
+          )}
           {isAnalyzing && (
             <Button variant="destructive" size="sm" onClick={stopAnalysis} className="gap-1.5">
               <Square className="w-3 h-3" /> إيقاف
@@ -2068,6 +2104,12 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
           )}
         </div>
 
+        )}
+        {/* Show live findings even when a user stays in the Scan tab. */}
+        {isAnalyzing && (suggestions.length + grammarIssues.length > 0) && workspaceTab === "scan" && (
+          <Button size="sm" variant="outline" className="w-full" onClick={() => setWorkspaceTab("results")}>
+            عرض النتائج الحالية ({suggestions.length + grammarIssues.length}) — الفحص مستمر
+          </Button>
         )}
         {/* Progress bar */}
         {progress && (

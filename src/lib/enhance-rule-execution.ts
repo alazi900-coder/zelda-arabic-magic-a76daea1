@@ -15,7 +15,7 @@ const TYPE_RULE_IDS: Record<string, string[]> = {
   terminology: ["detect_terminology", "detect_gs2_names_terms"],
   untranslated: ["detect_untranslated"],
   line_breaks: ["detect_line_breaks", "detect_risen_line_structure", "detect_pkm_linebreaks", "detect_gs2_control_codes"],
-  split_and_tags: ["detect_split_and_tags", "detect_plat_tags", "detect_pkm_overflow", "detect_gs2_control_codes"],
+  split_and_tags: ["detect_split_and_tags", "detect_black2_tags", "detect_plat_tags", "detect_pkm_overflow", "detect_gs2_control_codes"],
 };
 const CATEGORY_RULE_IDS: Record<string, string[]> = {
   wrong: ["detect_accuracy", "detect_missing_char", "detect_terminology", "detect_untranslated", "detect_risen_gendered_pickup", "detect_gs2_control_codes", "detect_gs2_names_terms", "detect_gs2_ui_consistency"],

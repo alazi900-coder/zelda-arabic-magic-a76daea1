@@ -83,6 +83,7 @@ const RULES: RuleDef[] = [
   // above — declared here but only reaches the prompt when the request's
   // game is 'platinum' (see PLATINUM_ONLY_RULE_IDS). Replaces the withheld
   // Xenoblade tag rules (XENOBLADE_TAG_RULE_IDS) with Platinum's own tag shape.
+  { id: 'detect_black2_tags', kind: 'detect', prompt: '**split_and_tags** — [Pokémon Black 2] Preserve every [CTRL:XXXX:...] and [CHAR:XXXX] byte-for-byte, in order, and preserve the original newline count. Never add, drop, change, or translate a control word. Do not import Xenoblade or Platinum game rules.' },
   { id: 'detect_plat_tags', kind: 'detect', prompt: '**split_and_tags** — [خاص بـPlatinum] الرموز من الشكل `{COLOR 1}` أو `{STRVAR_1 3, 0, 0}` (اسم بأحرف كبيرة، ثم اختيارياً رقم أو أرقام مفصولة بفواصل) وسوم محرّك اللعبة نفسها — تلوين أو مؤقّت أو قيمة تضعها اللعبة وقت التشغيل — وليست نصّاً. أصلح أي وسم من هذا الشكل تالفاً أو مفقوداً في الترجمة: استرجعه من الأصل بنفس القيمة والعدد والترتيب حرفاً بحرف. لا تخترع وسماً غير موجود في الأصل، ولا تحذف وسماً موجوداً فيه. ومعها رمزان لا ثالث لهما: `▼` و`▽` — فاصلا توقّف تنتظر عندهما اللعبة ضغطة زر من اللاعب (`▼` يمسح الصندوق ويبدأ صفحة جديدة، `▽` يمرّره لأعلى). ليسا حرفين ولا زينة: الرسالة التي يسقط منها أحدهما يستمرّ نصّها في الطباعة داخل صندوق سطرين لا يسعه، فلا يظهر ما بعده على الشاشة أبداً. أبقِهما بنفس العدد ونفس الترتيب ونفس موضعهما بين الكلمات، ولا تنقلهما ولا تحذفهما ولا تُضِف واحداً من عندك.' },
   // Crashlands-only rules: declared here, injected only when the request's
   // game is 'crashlands' (see CRASHLANDS_ONLY_RULE_IDS). The first names the
@@ -135,6 +136,7 @@ const RISEN_ONLY_RULE_IDS = new Set(['detect_risen_gendered_pickup', 'detect_ris
 const PKM_ONLY_RULE_IDS = new Set(['detect_pkm_var', 'detect_pkm_overflow', 'detect_pkm_linebreaks', 'detect_pkm_name_consistency']);
 /** Rules whose prompt text only makes sense for Platinum — never injected elsewhere. */
 const PLATINUM_ONLY_RULE_IDS = new Set(['detect_plat_tags']);
+const BLACK2_ONLY_RULE_IDS = new Set(['detect_black2_tags']);
 /** Rules whose prompt text only makes sense for Crashlands — never injected elsewhere. */
 const CRASHLANDS_ONLY_RULE_IDS = new Set(['detect_crashlands_tags', 'detect_crashlands_invented_names']);
 /** Rules whose prompt text only makes sense for 9th Dawn Remake — never injected elsewhere. */
@@ -203,6 +205,7 @@ const PKM_TYPE_TO_RULE_ID: Record<string, string> = {
 const PLATINUM_TYPE_TO_RULE_ID: Record<string, string> = {
   split_and_tags: 'detect_plat_tags',
 };
+const BLACK2_TYPE_TO_RULE_ID: Record<string, string> = { split_and_tags: 'detect_black2_tags' };
 
 /** Each result can identify its triggering active rule via rule_id.
  * This is required for custom rules, whose arbitrary prompts cannot be
@@ -222,6 +225,7 @@ function isTypeEnabled(type: string | undefined, activeDetectIds: Set<string>, r
     TYPE_TO_RULE_ID[type || ''],
     PKM_TYPE_TO_RULE_ID[type || ''],
     PLATINUM_TYPE_TO_RULE_ID[type || ''],
+    BLACK2_TYPE_TO_RULE_ID[type || ''],
     ...(GS2_TYPE_TO_RULE_IDS[type || ''] || []),
   ].filter(Boolean);
   // Unknown model-generated categories are not treated as an implicit
@@ -445,7 +449,18 @@ function preservesGoldenSunCodes(original: string, suggested: string): boolean {
   return goldenSunAllTechnicalTagsUnchanged(original, suggested);
 }
 
-function isSafeSuggestion(original: string, previous: string, suggested: string, isLumenTale = false, isGtaIv = false, isPokemonXp = false, isCrashlands = false, isNinthDawn = false, isInazuma = false, isFranBow = false, isTwom = false, isGtaSa = false, isGoldenSun = false): boolean {
+const BLACK2_TOKEN_RE = /\[(?:CTRL:[0-9A-Fa-f]{4}(?::[0-9A-Fa-f]{4})*|CHAR:[0-9A-Fa-f]{4})\]/g;
+function preservesBlack2Tokens(original: string, suggested: string): boolean {
+  const expected = original.match(BLACK2_TOKEN_RE) || [];
+  const actual = suggested.match(BLACK2_TOKEN_RE) || [];
+  if (expected.length !== actual.length || expected.some((token, i) => token !== actual[i])) return false;
+  if ((original.match(/\n/g) || []).length !== (suggested.match(/\n/g) || []).length) return false;
+  if ((suggested.match(/\[(?:CTRL|CHAR)(?::[^\]\r\n]*)?\]/gi) || []).length !== actual.length) return false;
+  if (/[\u202A-\u202E\u2066-\u2069\uFB50-\uFDFF\uFE70-\uFEFF]/.test(suggested)) return false;
+  return true;
+}
+
+function isSafeSuggestion(original: string, previous: string, suggested: string, isLumenTale = false, isGtaIv = false, isPokemonXp = false, isCrashlands = false, isNinthDawn = false, isInazuma = false, isFranBow = false, isTwom = false, isGtaSa = false, isGoldenSun = false, isBlack2 = false): boolean {
   return !!suggested &&
     !dropsOriginalTechnicalTags(original, suggested) &&
     !isUnsafeEnglishReplacement(original, previous, suggested) &&
@@ -464,7 +479,8 @@ function isSafeSuggestion(original: string, previous: string, suggested: string,
     (!isFranBow || preservesFranBowTokenSequence(original, suggested)) &&
     (!isTwom || preservesTwomTokens(original, suggested)) &&
     (!isGtaSa || preservesGtaSaTokenSequence(original, suggested)) &&
-    (!isGoldenSun || preservesGoldenSunCodes(original, suggested));
+    (!isGoldenSun || preservesGoldenSunCodes(original, suggested)) &&
+    (!isBlack2 || preservesBlack2Tokens(original, suggested));
 }
 
 // دفاعيّ (طبقة ثانية بعد تعليمات البرومبت): يرفض أي نتيجة يذكر شرحها أو
@@ -498,6 +514,7 @@ function buildRuleSections(
   isGtaSa = false,
   isGoldenSun = false,
   isGoldenSun2 = false,
+  isBlack2 = false,
 ): { detect: string; protect: string; detectCount: number; enabledSet: Set<string>; detectRuleIds: Set<string> } {
   // طبّق overrides على القواعد المبنيّة قبل الدمج. الـoverride يحلّ محلّ
   // الـprompt المثبّت في هذا الملف إن أرسله العميل لنفس الـid.
@@ -532,13 +549,14 @@ function buildRuleSections(
     (!RISEN_ONLY_RULE_IDS.has(r.id) || isRisen) &&
     (!PKM_ONLY_RULE_IDS.has(r.id) || isPokemon) &&
     (!PLATINUM_ONLY_RULE_IDS.has(r.id) || isPlatinum) &&
+    (!BLACK2_ONLY_RULE_IDS.has(r.id) || isBlack2) &&
     (!CRASHLANDS_ONLY_RULE_IDS.has(r.id) || isCrashlands) &&
     (!NINTHDAWN_ONLY_RULE_IDS.has(r.id) || isNinthDawn) &&
     (!FRANBOW_ONLY_RULE_IDS.has(r.id) || isFranBow) &&
     (!TWOM_ONLY_RULE_IDS.has(r.id) || isTwom) &&
     (!GTASA_ONLY_RULE_IDS.has(r.id) || isGtaSa) &&
     (!GOLDENSUN2_ONLY_RULE_IDS.has(r.id) || isGoldenSun2) &&
-    (!XENOBLADE_TAG_RULE_IDS.has(r.id) || (!isPokemon && !isLumenTale && !isGtaIv && !isPlatinum && !isCrashlands && !isNinthDawn && !isInazuma && !isFranBow && !isTwom && !isGtaSa && !isGoldenSun));
+    (!XENOBLADE_TAG_RULE_IDS.has(r.id) || (!isPokemon && !isLumenTale && !isGtaIv && !isPlatinum && !isBlack2 && !isCrashlands && !isNinthDawn && !isInazuma && !isFranBow && !isTwom && !isGtaSa && !isGoldenSun));
   const activeDetectRules = all.filter(r => r.kind === 'detect' && isActive(r));
   const detectLines = activeDetectRules.map((r, i) => `${i + 1}. [rule_id: ${r.id}] ${r.prompt}`);
   const protectLines = all.filter(r => r.kind === 'protect' && isActive(r)).map(r => r.prompt);
@@ -662,7 +680,7 @@ Deno.serve(async (req) => {
       builtinOverrides?: Record<string, { prompt?: string }>;
       passes?: number;
       /** Which game these entries are from — swaps prompt lore/proper-nouns. Defaults to Xenoblade for backward compatibility. */
-      game?: 'xenoblade' | 'risen' | 'risen1' | 'risen2' | 'mother3' | 'metroidprime' | 'pokemon' | 'platinum' | 'pokemon-xp' | 'lumentale' | 'gtaiv' | 'inazuma';
+      game?: 'xenoblade' | 'risen' | 'risen1' | 'risen2' | 'mother3' | 'metroidprime' | 'pokemon' | 'platinum' | 'black2' | 'pokemon-xp' | 'lumentale' | 'gtaiv' | 'inazuma';
       /** The active filter card's dedicated prompt, or the general prompt — appended to all 3 modes' prompts. */
       extraInstructions?: string;
       /** أمثلة من رفض/تعديل المستخدم لاقتراحات سابقة (مُنسَّقة جاهزة من src/lib/enhance-feedback-memory.ts) — تُحقن كتنبيه "تجنّب تكرار هذا النمط". */
@@ -680,6 +698,7 @@ Deno.serve(async (req) => {
     const isMetroidPrime = game === 'metroidprime';
     const isPokemon = game === 'pokemon';
     const isPlatinum = game === 'platinum';
+    const isBlack2 = game === 'black2';
     const isPokemonXp = game === 'pokemon-xp';
     const isLumenTale = game === 'lumentale';
     const isGtaIv = game === 'gtaiv';
@@ -710,6 +729,8 @@ Deno.serve(async (req) => {
       ? 'Steins;Gate (PSP)'
       : isGtaIv
       ? 'Grand Theft Auto IV (GTA IV)'
+      : isBlack2
+      ? 'Pokémon Black 2 (Nintendo DS, Unova)'
       : isPlatinum
       ? 'Pokémon Platinum (Nintendo DS)'
       : isPokemon
@@ -743,6 +764,8 @@ Deno.serve(async (req) => {
       ? '\nهذه مراجعة خاصة بـ Crashlands — لعبة بقاء وصناعة على كوكب غريب، نبرتها ساخرة هازلة ومليئة بالتلاعب اللفظي وأسماء مخترعة (Lognest، Flux Dabes، Juicebox، Bawg، Tendrilis). هذه الأسماء اختُرعت للعبة ولا يعرفها أحد: انقلها صوتياً ولا تترجمها ولا «تصحّحها» إلى شيء مألوف. لا تفترض مصطلحات أو شخصيات من Xenoblade أو أي لعبة أخرى إطلاقاً.\n\nرمزان تقنيّان لا ثالث لهما:\n• %r — قيمة رقمية يضعها المحرّك وقت التشغيل («deals %r% bonus damage»). انسخه حرفياً وبالعدد والترتيب نفسه. وعلامة % التي بعده أحياناً هي علامة مئوية عادية من النصّ.\n• # — فاصل سطر. ضياعه يدمج سطرين على الشاشة. حافظ على عدده وموضعه.\nوالنسب المئوية العادية مثل -25% نصّ لا رمز، فلا تمسّها.\n'
       : isSteinsGate
       ? '\nهذه مراجعة خاصة بـ Steins;Gate PSP. حافظ على نبرة الخيال العلمي والشخصيات والمصطلحات الموحّدة. كل وسم يبدأ بـ % مثل %K و%P و%CE و%CF8FF8 أمر للمحرك؛ يجب نسخه حرفياً وبالعدد والترتيب والموضع نفسه.\n'
+      : isBlack2
+      ? '\nهذه مراجعة خاصة بـ Pokémon Black 2 في منطقة Unova، وليست Pokémon Platinum أو Xenoblade. احفظ كل [CTRL:...] و[CHAR:...] حرفياً وبالترتيب نفسه واحفظ عدد الأسطر؛ لا تُدخل رموز ألعاب أخرى.\n'
       : isPlatinum
       ? '\nهذه مراجعة خاصة بـ Pokémon Platinum (Nintendo DS) — عالم Sinnoh، بروفيسور روان، الصالات، الأوسمة، مراكز بوكيمون، الحركات والأنواع والعناصر. لا تفترض سياق Xenoblade أو أي لعبة أخرى؛ استند فقط إلى النص والقاموس المعطى. هذه ليست لعبة خيال ملحمي: كلمة "Mail" هنا تعني عنصر البريد (بطاقة بريدية يحملها البوكيمون، مثل "Bloom Mail")، وليست درعاً معدنياً — لا تفترض معنى "درع" لها إطلاقاً.\n'
       : isPokemonXp
@@ -851,12 +874,12 @@ Deno.serve(async (req) => {
     };
 
     // قسّم القواعد المُفعَّلة (مبنيّة + مخصّصة) إلى كتلتَي اكتشاف/حماية.
-    const ruleSections = buildRuleSections(enabledRules, customRules, builtinOverrides, isRisen, isPokemon, isLumenTale, isGtaIv, isPlatinum, isCrashlands, isNinthDawn, isInazuma, isFranBow, isTwom, isGtaSa, isGoldenSun, game === 'goldensun2');
+    const ruleSections = buildRuleSections(enabledRules, customRules, builtinOverrides, isRisen, isPokemon, isLumenTale, isGtaIv, isPlatinum, isCrashlands, isNinthDawn, isInazuma, isFranBow, isTwom, isGtaSa, isGoldenSun, game === 'goldensun2', isBlack2);
     // استبدل {{PROPER_NOUNS_SECTION}} في prompt قاعدة الأسماء — قائمة Xenoblade
     // الفعليّة عند Xenoblade، أو صياغة عامّة (بلا أسماء مُفترَضة) عند Risen.
     // قائمة Xenoblade تُحقَن عند Xenoblade وحدها. حقنها في مراجعة بوكيمون كان
     // يخبر النموذج أن Shulk وMonado وColony 9 أسماء هذه اللعبة، وهي ليست فيها.
-    const properNounsSection = isGoldenSun || game === 'generic' || isRisen || isMother3 || isPokemon || isPlatinum || isPokemonXp || isLumenTale || isGtaIv || isSteinsGate || isCrashlands || isNinthDawn || isInazuma || isFranBow || isTwom || isGtaSa
+    const properNounsSection = isGoldenSun || game === 'generic' || isRisen || isMother3 || isPokemon || isPlatinum || isBlack2 || isPokemonXp || isLumenTale || isGtaIv || isSteinsGate || isCrashlands || isNinthDawn || isInazuma || isFranBow || isTwom || isGtaSa
       ? 'أسماء الشخصيات أو الأماكن أو العناصر الخاصّة الواردة في النصّ'
       : `الأسماء الأعلام لـ Xenoblade Chronicles 1 (${XC1_PROPER_NOUNS})`;
     ruleSections.protect = ruleSections.protect.replace(/\{\{PROPER_NOUNS_SECTION\}\}/g, properNounsSection);
@@ -866,6 +889,12 @@ Deno.serve(async (req) => {
       ruleSections.protect = ruleSections.protect.replace(
         '[Color:Red] [Icon:*] [XENO:n] [XENO:wait] ولا رموز PUA (\\uE000-\\uE0FF) ولا رموز \\uFFF9-\\uFFFC',
         'من نوع {FD:xx} — وهي قيم تضعها اللعبة وقت التشغيل مثل اسم اللاعب. لا وسوم أخرى في هذه اللعبة، فلا تُضِف وسماً من لعبة أخرى'
+      );
+    }
+    if (isBlack2) {
+      ruleSections.protect = ruleSections.protect.replace(
+        '⚠️ لا تكسر الوسوم التقنيّة [Color:Red] [Icon:*] [XENO:n] [XENO:wait] ولا رموز PUA (\\uE000-\\uE0FF) ولا رموز \\uFFF9-\\uFFFC.',
+        '⚠️ احفظ أوامر Pokémon Black 2 من نوع [CTRL:XXXX:...] و[CHAR:XXXX] حرفياً وبالعدد والترتيب نفسيهما، واحفظ فواصل الأسطر ولا تضف وسوم Xenoblade أو Platinum.'
       );
     }
     if (isPlatinum) {
@@ -892,6 +921,7 @@ Deno.serve(async (req) => {
         '⚠️ عقد LumenTale التقني ثابت: انقل كل placeholder ووسم Unity/TMP وescape ووسم تحكم وprintf من الأصل حرفاً بحرف وبالترتيب نفسه. لا تضف أو تحذف أو تترجم أو تعيد ترتيب أي رمز.'
       );
     }
+    if (isBlack2) ruleSections.protect += '\n⚠️ Pokémon Black 2: لا تغيّر الوسوم [CTRL:...] أو [CHAR:...] أو فواصل الأسطر.';
     const strictTokenSafetyRule = isGoldenSun
       ? 'قاعدة أمان Golden Sun: كل رمز من الشكل \\xNN في النص الأصلي يجب أن يبقى بالقيمة والعدد والترتيب نفسه حرفياً في كل اقتراح وبديل. لا تعكس العربية ولا تخترع وسماً من لعبة أخرى.'
       : isPokemonXp
@@ -900,6 +930,8 @@ Deno.serve(async (req) => {
       ? 'قاعدة أمان غير قابلة للتجاوز في LumenTale: يجب أن يحتوي الاقتراح على كل placeholder ووسم Unity/TMP وescape ووسم تحكم وprintf من الأصل بالقيمة والترتيب نفسيهما حرفاً بحرف. لا تضف أو تحذف أو تترجم أو تعيد ترتيب أي رمز.'
       : isGtaIv
       ? 'قاعدة أمان غير قابلة للتجاوز في GTA IV: يجب أن يحتوي الاقتراح على كل رمز بين ~...~ وكل مبلغ دولار ظاهر من الأصل (مثل $100 و$20m) بالقيمة والترتيب نفسيهما حرفاً بحرف. لا تضف أو تحذف أو تترجم أو تنقل أيّاً منها، ولا تترك علامة ~ منفردة.'
+      : isBlack2
+      ? 'قاعدة أمان Pokémon Black 2: كل [CTRL:...] و[CHAR:...] يجب أن يبقى بالقيمة والعدد والترتيب نفسها، مع عدم تغيير عدد فواصل الأسطر.'
       : isPlatinum
       ? 'قاعدة أمان غير قابلة للتجاوز في Pokémon Platinum: إذا كان الأصل يحتوي وسوماً من الشكل {NAME} أو {NAME N} أو {NAME N, N, N} مثل {COLOR 1} أو {STRVAR_1 3, 0, 0}، فيجب أن يحتوي حقل suggestion على نفس الوسوم بالقيمة والعدد والترتيب نفسه حرفاً بحرف. لا تقل إن الوسم غير موجود في الأصل إذا كان ظاهراً في سطر الأصل.'
       : game === 'xenoblade'
@@ -913,6 +945,8 @@ Deno.serve(async (req) => {
       ? '- في LumenTale يجب أن يحتوي suggested وكل بديل على كل placeholder ووسم Unity/TMP وescape ووسم تحكم وprintf من الأصل بالقيمة والترتيب نفسيهما حرفاً بحرف.'
       : isGtaIv
       ? '- في GTA IV يجب أن يحتوي suggested وكل بديل على كل رمز بين ~...~ وكل مبلغ دولار ظاهر بالقيمة والترتيب نفسيهما حرفاً بحرف، ومن دون علامة ~ منفردة.'
+      : isBlack2
+      ? '- في Pokémon Black 2 احفظ أوامر [CTRL:...] و[CHAR:...] وعدد فواصل الأسطر تماماً كما في الأصل.'
       : isPlatinum
       ? '- في Pokémon Platinum يجب أن يحتوي suggested وكل بديل على كل وسم من الشكل {NAME} أو {NAME N, ...} مثل {COLOR 1} من الأصل بالقيمة والعدد والترتيب نفسه حرفاً بحرف.'
       : game === 'xenoblade'
@@ -1356,7 +1390,7 @@ ${promptEntriesChunk.map((e, i) => `[${i}]${e.category ? ` (تصنيف النص:
           };
         }).filter((i) =>
           i.key && i.suggestion !== i.translation &&
-	          isSafeSuggestion(i.original, i.translation, i.suggestion, isLumenTale, isGtaIv, isPokemonXp, isCrashlands, isNinthDawn, isInazuma, isFranBow, isTwom, isGtaSa, isGoldenSun) &&
+	          isSafeSuggestion(i.original, i.translation, i.suggestion, isLumenTale, isGtaIv, isPokemonXp, isCrashlands, isNinthDawn, isInazuma, isFranBow, isTwom, isGtaSa, isGoldenSun, isBlack2) &&
           isCategoryEnabled(i.category, ruleSections.detectRuleIds, i.ruleId) &&
           (!(isRisen || isMother3) || !mentionsUnrelatedFranchiseLore(`${i.issue} ${i.detail} ${i.fixExplanation} ${i.suggestion}`, i.original, glossary)),
         );
@@ -1478,7 +1512,7 @@ ${promptEntriesChunk.map((e, i) => `[${i}]${e.category ? ` (تصنيف النص:
         })
           .filter((r) =>
             r.key && r.suggested !== r.translation &&
-	            isSafeSuggestion(r.original, r.translation, r.suggested, isLumenTale, isGtaIv, isPokemonXp, isCrashlands, isNinthDawn, isInazuma, isFranBow, isTwom, isGtaSa, isGoldenSun) &&
+	            isSafeSuggestion(r.original, r.translation, r.suggested, isLumenTale, isGtaIv, isPokemonXp, isCrashlands, isNinthDawn, isInazuma, isFranBow, isTwom, isGtaSa, isGoldenSun, isBlack2) &&
             isTypeEnabled(r.type, ruleSections.detectRuleIds, r.ruleId) &&
             (!(isRisen || isMother3) || !mentionsUnrelatedFranchiseLore(`${r.issue} ${r.detail} ${r.fixExplanation} ${r.suggested}`, r.original, glossary)),
           );
@@ -1544,7 +1578,7 @@ ${promptEntriesChunk.map((e, i) => `[${i}]${e.category ? ` (تصنيف النص:
         passes || 1,
         () => callOnceParse(
           [
-	            { role: 'system', content: isGoldenSun || isRisen || isMother3 || isPokemonXp || isLumenTale || isGtaIv || isPlatinum
+	            { role: 'system', content: isGoldenSun || isRisen || isMother3 || isPokemonXp || isLumenTale || isGtaIv || isPlatinum || isBlack2
               ? `أنت مترجم ومراجع محترف لـ ${gameLabel}. أجب بـ JSON صالح فقط. كن شاملاً — أعِد كل المشاكل الحقيقيّة دفعةً واحدةً.`
               : `أنت مترجم ومراجع محترف لـ ${gameLabel} (نينتندو، مونوليث سوفت). أجب بـ JSON صالح فقط. كن شاملاً — أعِد كل المشاكل الحقيقيّة دفعةً واحدةً.` },
             { role: 'user', content: enhancePrompt },
@@ -1568,7 +1602,7 @@ ${promptEntriesChunk.map((e, i) => `[${i}]${e.category ? ` (تصنيف النص:
           alternatives: Array.isArray(s.alternatives)
             ? s.alternatives.filter((a: unknown) => typeof a === 'string' && a.trim())
               .map((a) => stripGameUnsupportedMarks(restoreSuggestion(entry?.key || '', a as string)))
-              .filter((alternative) => isSafeSuggestion(original, current, alternative, isLumenTale, isGtaIv, isPokemonXp, isCrashlands, isNinthDawn, isInazuma, isFranBow, isTwom, isGtaSa, isGoldenSun))
+              .filter((alternative) => isSafeSuggestion(original, current, alternative, isLumenTale, isGtaIv, isPokemonXp, isCrashlands, isNinthDawn, isInazuma, isFranBow, isTwom, isGtaSa, isGoldenSun, isBlack2))
             : [],
           reason: s.reason,
           detail: s.detail || '',
@@ -1577,7 +1611,7 @@ ${promptEntriesChunk.map((e, i) => `[${i}]${e.category ? ` (تصنيف النص:
         };
       }).filter((s) =>
         s.key && s.suggested !== s.current &&
-	        isSafeSuggestion(s.original, s.current, s.suggested, isLumenTale, isGtaIv, isPokemonXp, isCrashlands, isNinthDawn, isInazuma, isFranBow, isTwom, isGtaSa, isGoldenSun) &&
+	        isSafeSuggestion(s.original, s.current, s.suggested, isLumenTale, isGtaIv, isPokemonXp, isCrashlands, isNinthDawn, isInazuma, isFranBow, isTwom, isGtaSa, isGoldenSun, isBlack2) &&
         isTypeEnabled(s.type, ruleSections.detectRuleIds, s.ruleId) &&
         (!(isRisen || isMother3) || !mentionsUnrelatedFranchiseLore(`${s.reason} ${s.detail} ${s.suggested}`, s.original, glossary)),
       );

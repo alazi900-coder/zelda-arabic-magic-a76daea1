@@ -214,6 +214,8 @@ Hard constraints, because of how this game stores its text:
  * not the GBA ROM hack that prompt describes. Its own tags ({COLOR 1},
  * {STRVAR_1 3, 0, 0}, ...) are masked to TAG_N by protectTags before this
  * prompt is ever built; named here only so the model doesn't invent one. */
+const BLACK2_SYSTEM_PROMPT = `You are an Arabic localization translator for Pokémon Black 2 (Nintendo DS, Unova), not Pokémon Platinum, Ruby Destiny or Xenoblade. Write fluent modern Arabic and follow the supplied game glossary. Preserve every TAG_N, NEWLINE_N and locked term placeholder literally with its numeric identity and sequence. These placeholders represent original [CTRL:...] and [CHAR:...] engine controls; never change, drop, invent, translate or move their sequence. Preserve the exact number of original newlines. Do not add Unicode bidi directional controls or pre-shaped Arabic Presentation Forms. Output only valid translation JSON with the required keys. If you cannot keep the controls intact, return the English source unchanged for that entry.`;
+
 const PLATINUM_SYSTEM_PROMPT = `You are a professional video game text translator working on Pokémon Platinum (Nintendo DS) — the Sinnoh region, Professor Rowan, Gyms, badges, Poké Balls, Pokémon Centers, moves, types, held items and TMs. This is NOT Xenoblade Chronicles, NOT the Risen series, NOT MOTHER 3, NOT Metroid Prime, and NOT the GBA "Pokémon Ruby Destiny" ROM hack — never import their terminology, characters, or lore. In particular, this is not a high-fantasy or military setting: words like "Mail" mean the in-game Mail item (a postcard/letter a Pokémon can hold and trade, e.g. "Bloom Mail", "Bead Mail" — flavor text and a decorative pattern, never armor), not chainmail or plate armor.
 
 STRICT OUTPUT RULES (highest priority — violations are hard failures):
@@ -297,7 +299,7 @@ function buildXC1UserPrompt(opts: {
   /** When true, includes the deeper personality/lore section (used in batch path). */
   detailed?: boolean;
   /** Which game this batch belongs to — swaps universe knowledge and terminology guidance. Defaults to Xenoblade. */
-  game?: 'xenoblade' | 'risen' | 'risen1' | 'risen2' | 'mother3' | 'metroidprime' | 'pokemon' | 'platinum' | 'pokemon-xp' | 'gtaiv' | 'goldensun' | 'goldensun2';
+  game?: 'xenoblade' | 'risen' | 'risen1' | 'risen2' | 'mother3' | 'metroidprime' | 'pokemon' | 'platinum' | 'black2' | 'pokemon-xp' | 'gtaiv' | 'goldensun' | 'goldensun2';
 }): string {
   const { textsBlock, expectedCount, npcRule = '', categorySection = '', userInstructionsSection = '', glossarySection = '', contextSection = '', detailed = false, game = 'xenoblade' } = opts;
 
@@ -518,6 +520,12 @@ function protectTags(text: string): { cleaned: string; tags: Map<string, string>
       matches.push({ start: gMatch.index, end: gMatch.index + gMatch[0].length, original: gMatch[0], gtaiv: true });
     }
   }
+  if (_game === 'black2') {
+    const commandRegex = /\[(?:CTRL:[0-9A-Fa-f]{4}(?::[0-9A-Fa-f]{4})*|CHAR:[0-9A-Fa-f]{4})\]/g;
+    for (const match of shielded.matchAll(commandRegex)) {
+      matches.push({ start: match.index!, end: match.index! + match[0].length, original: match[0] });
+    }
+  }
   if (_game === 'inazuma') {
     // Inazuma Eleven's own tokens (see INAZUMA_TAG_RE in
     // src/lib/inazuma/inazuma-tags.ts): `▼` -- the editor's spelling of the
@@ -674,7 +682,7 @@ let _extraInstructions = '';
 let _npcMaxLines: number | undefined = undefined;
 let _npcMode = false;
 /** Which game the current request is for — set per-request from Deno.serve; picks the system prompt / universe knowledge. */
-let _game: 'xenoblade' | 'risen' | 'risen2' | 'mother3' | 'metroidprime' | 'pokemon' | 'platinum' | 'pokemon-xp' | 'gtaiv' | 'steinsgate' | 'inazuma' | 'gtasa' | 'goldensun' | 'goldensun2' = 'xenoblade';
+let _game: 'xenoblade' | 'risen' | 'risen2' | 'mother3' | 'metroidprime' | 'pokemon' | 'platinum' | 'black2' | 'pokemon-xp' | 'gtaiv' | 'steinsgate' | 'inazuma' | 'gtasa' | 'goldensun' | 'goldensun2' = 'xenoblade';
 
 const STEINSGATE_SYSTEM_PROMPT = `أنت مترجم محترف للعبة Steins;Gate على PSP. استخدم فصحى طبيعية حديثة تحافظ على التوتر العلمي والكوميديا وشخصيات العمل: أوكابي مسرحي، كوريسو ذكية ولاذعة، مايوري لطيفة، ودارو ساخر تقني. ثبّت أسماء الشخصيات ومصطلحات خط العالم وD-Mail وPhoneWave وReading Steiner. القوائم قصيرة ومباشرة. كل رمز يبدأ بـ % مثل %K و%P و%CE و%CF8FF8 أمر للمحرك: انسخه حرفياً وبالعدد والترتيب والموضع نفسه ولا تترجمه.`;
 
@@ -686,6 +694,7 @@ function getGameSystemPrompt(): string {
   if (_game === 'gtasa') return GTASA_SYSTEM_PROMPT;
   if (_game === 'pokemon-xp') return POKEMON_XP_SYSTEM_PROMPT;
   if (_game === 'platinum') return PLATINUM_SYSTEM_PROMPT;
+  if (_game === 'black2') return BLACK2_SYSTEM_PROMPT;
   if (_game === 'pokemon') return POKEMON_SYSTEM_PROMPT;
   if (_game === 'metroidprime') return METROIDPRIME_SYSTEM_PROMPT;
   if (_game === 'mother3') return MOTHER3_SYSTEM_PROMPT;
@@ -760,6 +769,18 @@ function detectCategoryHint(sampleKey: string, sampleText: string): string {
 
 function restoreAndEnforce(original: string, translated: string, tags: Map<string, string>, entryKey?: string): string {
   const restored = restoreTags(translated, tags);
+  if (_game === 'black2') {
+    // Keep a failed or hallucinated AI result out of the editor. The source
+    // stays English rather than writing damaged control bytes to the ROM.
+    const pattern = /\[(?:CTRL:[0-9A-Fa-f]{4}(?::[0-9A-Fa-f]{4})*|CHAR:[0-9A-Fa-f]{4})\]/g;
+    const wanted = original.match(pattern) || [];
+    const actual = restored.match(pattern) || [];
+    const correct = wanted.length === actual.length && wanted.every((t, i) => t === actual[i]) &&
+      (original.match(/\n/g) || []).length === (restored.match(/\n/g) || []).length &&
+      (restored.match(/\[(?:CTRL|CHAR)(?::[^\]\r\n]*)?\]/gi) || []).length === actual.length &&
+      !/[\u202A-\u202E\u2066-\u2069\uFB50-\uFDFF\uFE70-\uFEFF]/.test(restored);
+    return correct ? restored : original;
+  }
   // Golden Sun must not undergo generic AI line balancing: \x03 and \x1E are
   // game-engine layout/control bytes, not ordinary paragraph separators.
   if (_game === 'goldensun2' || _game === 'goldensun') {
@@ -2300,7 +2321,7 @@ Deno.serve(async (req) => {
     _npcMode = !!npcMode;
     _npcMaxLines = npcMaxLines && npcMaxLines >= 1 && npcMaxLines <= 3 ? npcMaxLines : undefined;
     _extraInstructions = (extraInstructions || '').trim().slice(0, 4000);
-    _game = game === 'goldensun2' ? 'goldensun2' : game === 'goldensun' ? 'goldensun' : game === 'steinsgate' ? 'steinsgate' : game === 'gtaiv' ? 'gtaiv' : game === 'pokemon-xp' ? 'pokemon-xp' : game === 'platinum' ? 'platinum' : game === 'pokemon' ? 'pokemon' : game === 'metroidprime' ? 'metroidprime' : game === 'mother3' ? 'mother3' : game === 'risen2' ? 'risen2' : (game === 'risen' || game === 'risen1') ? 'risen' : game === 'inazuma' ? 'inazuma' : game === 'gtasa' ? 'gtasa' : 'xenoblade';
+    _game = game === 'goldensun2' ? 'goldensun2' : game === 'goldensun' ? 'goldensun' : game === 'steinsgate' ? 'steinsgate' : game === 'gtaiv' ? 'gtaiv' : game === 'pokemon-xp' ? 'pokemon-xp' : game === 'platinum' ? 'platinum' : game === 'black2' ? 'black2' : game === 'pokemon' ? 'pokemon' : game === 'metroidprime' ? 'metroidprime' : game === 'mother3' ? 'mother3' : game === 'risen2' ? 'risen2' : (game === 'risen' || game === 'risen1') ? 'risen' : game === 'inazuma' ? 'inazuma' : game === 'gtasa' ? 'gtasa' : 'xenoblade';
 
     if (!entries || entries.length === 0) {
       return new Response(JSON.stringify({ error: 'لا توجد نصوص للترجمة' }), {

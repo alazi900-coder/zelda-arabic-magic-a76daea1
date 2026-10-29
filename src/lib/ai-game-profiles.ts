@@ -74,6 +74,7 @@ const ONLY: Record<string, readonly AiGameProfile[]> = {
   detect_pkm_linebreaks: ["pokemon"],
   detect_pkm_name_consistency: ["pokemon"],
   detect_plat_tags: ["platinum"],
+  detect_black2_tags: ["black2"],
   detect_crashlands_tags: ["crashlands"],
   detect_crashlands_invented_names: ["crashlands"],
   detect_ninthdawn_tags: ["ninthdawn"],

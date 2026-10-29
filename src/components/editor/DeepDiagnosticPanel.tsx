@@ -113,6 +113,7 @@ const CATEGORIES: DiagnosticCategory[] = [
   { id: "empty_translation", label: "ترجمة فارغة/مسافات فقط", icon: "🫥", severity: "warning", description: "ترجمة تحتوي مسافات أو أحرف غير مرئية فقط" },
   { id: "corrupted_vars", label: "متغيرات $N تالفة", icon: "💲", severity: "critical", description: "متغيرات $1/$2 مترجمة خطأً (دولار1، 1.$، إلخ) — تسبب تجمّد اللعبة" },
   { id: "pkm_var_mismatch", label: "قيم بوكيمون المفقودة", icon: "🚫", severity: "critical", description: "رمز مثل {FD:01} حُذف أو تغيّر أو انتقل — تفقد الشخصية اسمها في كل سطر يناديها به" },
+  { id: "black2_token_mismatch", label: "وسوم Pokémon Black 2 وفواصل أسطرها", icon: "🛡️", severity: "critical", description: "يفحص [CTRL:...] و[CHAR:...] حرفياً وبالترتيب مع فواصل الأسطر؛ لا يُخمّن الرموز المفقودة ولا يغيّر الكلمات العربية." },
   { id: "plat_tag_mismatch", label: "وسوم Platinum المفقودة", icon: "◈", severity: "critical", description: "وسم مثل {STRVAR_1 3, 0, 0} حُذف أو تغيّر أو انتقل — يترك فراغاً في الجملة، أو يضع كل قيمة في موضع الأخرى" },
   { id: "pkm_line_too_wide", label: "سطر أعرض من صندوق الحوار (بوكيمون)", icon: "📐", severity: "critical", description: "المحرّك لا يلفّ السطر: ما يتجاوز ١٩٨ بكسل يُرسم خارج الصندوق ولا يُمسح، فيبقى فوق الرسائل التالية — الإصلاح يضع فاصل سطر" },
   { id: "missing_vars", label: "متغيرات $N مفقودة", icon: "🚫", severity: "critical", description: "متغيرات $1/$2 محذوفة كلياً من الترجمة — تسبب تجمّد اللعبة أو قيم خاطئة" },
@@ -354,6 +355,11 @@ export default function DeepDiagnosticPanel({ state, onNavigateToEntry, onApplyF
 
   /** Run the same build guard used during export; if result is still unsafe, restore English */
   const getSafeTagRepair = useCallback((entry: ExtractedEntry, text: string) => {
+    if (entry.msbtFile.startsWith("black2/")) {
+      // A control may encode a runtime operation; its original position cannot
+      // be reconstructed safely from a damaged translation. Review manually.
+      return { finalText: text, repairedText: text, changed: false, restoredOriginal: false, repairedIssues: detectIssues(entry, text) };
+    }
     if (entry.msbtFile.startsWith("crashlands/")) {
       const repaired = repairCrashlandsTags(entry.original, text);
       return { finalText: repaired.text, repairedText: repaired.text, changed: repaired.changed, restoredOriginal: false, repairedIssues: detectIssues(entry, repaired.text) };

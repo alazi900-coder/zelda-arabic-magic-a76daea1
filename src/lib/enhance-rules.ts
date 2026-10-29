@@ -153,6 +153,14 @@ export const BUILTIN_RULES: EnhanceRule[] = [
       '**consistency** — [خاص ببوكيمون] أسماء البوكيمون والمهارات والأغراض تسكن خانات ثابتة الحجم: كل واحد اسم مفرد بلا نقطة ولا جملة وصفية، ويجب أن يُكتب بنفس الصورة في كل المواضع. اسم واحد بصورتين في اللعبة نفسها خطأ حتى لو كانت الصورتان صحيحتين لغوياً.',
   },
   {
+    id: 'detect_black2_tags',
+    label: 'وسوم التحكم في Pokémon Black 2',
+    description: 'يفحص [CTRL:...] و[CHAR:...] وفواصل الأسطر ويمنع تغييرها أو إضافة أوامر غير موجودة في الأصل — خاص بـ Black 2.',
+    kind: 'detect',
+    defaultEnabled: true,
+    prompt: '**split_and_tags** — [خاص بـ Pokémon Black 2] كل [CTRL:XXXX:...] و[CHAR:XXXX] أمر تقني من ملف Nintendo DS، ولا يجوز حذف أي رمز أو تغييره أو زيادة رموز أو إعادة ترتيبها. احفظ عدد فواصل الأسطر من الأصل. أبق العربية منطقية طبيعية دون رموز اتجاه خفية أو أشكال عرض جاهزة؛ لا تفترض وسوم Platinum أو Xenoblade.',
+  },
+  {
     id: 'detect_plat_tags',
     label: 'وسوم اللعبة {COLOR N} (Pokémon Platinum)',
     description:

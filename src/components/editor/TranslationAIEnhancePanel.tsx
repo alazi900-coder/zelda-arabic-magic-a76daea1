@@ -50,6 +50,7 @@ import {
 import { restoreTagsLocally } from "@/lib/xc3-tag-restoration";
 import { diffTechnicalTags } from "@/lib/xc3-build-tag-guard";
 import { categorizeRisenTable, risenTableFromMsbtFile } from "@/lib/risen/categories";
+import { validateBlack2Translation } from "@/lib/pokemon-black2/black2-json";
 import { validateLumenTaleTranslation } from "@/lib/lumentale/lumentale-token-guard";
 import { repairGtaIvDollarAmountSequence, validateGtaIvDollarAmountSequence, validateGtaIvRuntimeTokenSequence } from "@/lib/gtaiv/gxt-format";
 import { POKEMON_XP_TOKEN_RULE, validatePokemonXpTechnicalTokens } from "@/lib/pokemon-xp/pokemon-xp-rules";
@@ -295,6 +296,7 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
   const isLumenTale = gameParam === "lumentale";
   const isGtaIv = gameParam === "gtaiv";
   const isPokemonXp = gameParam === "pokemon-xp";
+  const isBlack2 = gameParam === "black2";
   const isCrashlands = gameParam === "crashlands";
   const isNinthDawn = gameParam === "ninthdawn";
   const isInazuma = gameParam === "inazuma";
@@ -308,6 +310,7 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
       !goldenSunAllTechnicalTagsUnchanged(original, suggestion))) {
       return "اقتراح Golden Sun يُغيّر وسماً أو ترتيب فاصل سطر، أو يُدخل علامات اتجاه/أشكال Unicode غير آمنة.";
     }
+    if (isBlack2) return validateBlack2Translation(original, suggestion);
     if (isLumenTale) return validateLumenTaleTranslation(original, suggestion);
     if (isPokemonXp) return validatePokemonXpTechnicalTokens(original, suggestion).reason;
     // `%r` and `#` are the whole technical vocabulary of this game, and the

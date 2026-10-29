@@ -17,6 +17,7 @@ import { countEffectiveLines } from "@/lib/text-tokens";
 import { fixMixedBidi } from "@/lib/arabic-processing";
 import { getEdgeFunctionUrl, getSupabaseHeaders } from "@/lib/supabase-edge";
 import { resolveGameParam } from "@/lib/game-param";
+import { profileDefaultPrompt } from "@/lib/ai-game-profiles";
 import type { BatchQualityStats, CumulativeQuality } from "@/lib/batch-quality";
 import { requestGmiCloudDirect, type GmiCloudEntry } from "@/lib/gmicloud-direct";
 import { requestCodeCraftDirect, type CodeCraftEntry } from "@/lib/codecraft-direct";
@@ -245,6 +246,7 @@ export function useEditorTranslation({
       isRisenSource ? RISEN_LINE_STRUCTURE_RULE : "",
       isLumenTaleSource ? LUMENTALE_TOKEN_RULE : "",
       isPokemonXpSource ? POKEMON_XP_TOKEN_RULE : "",
+      gameParam === "black2" ? profileDefaultPrompt("black2") : "",
     ].filter(Boolean);
     return parts.length ? parts.join("\n\n") : undefined;
   };

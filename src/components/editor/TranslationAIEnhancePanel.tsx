@@ -38,7 +38,7 @@ import { makeEnhanceCacheKey, enhanceCacheLookup, enhanceCacheStore, enhanceCach
 import { backTranslateBatch, wordsJaccard, orderOverlap, isOrderComparable } from "@/lib/back-translate";
 import { isTranslationExcludedText, type ExtractedEntry } from "./types";
 import { EnhanceRulesDialog } from "./EnhanceRulesDialog";
-import { explainEnhancementProviderError } from "@/lib/enhance-provider-error";
+import { explainEnhancementProviderError, isEnhancementBillingError } from "@/lib/enhance-provider-error";
 import {
   getActiveEnhancementRules, buildActiveEnhancementInstructions,
   filterDirectEnhancementFindings,
@@ -664,6 +664,9 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
     let allIssues: GrammarIssue[] = [];
     let processed = 0;
     let encounteredError = false;
+    // خطأ دفع 402 دائم، وليس خطأ شبكيًا مؤقتًا. لا تُرسل كل دفعات الفحص
+    // إلى البوابة بعد ثبوت نفاد رصيدها؛ حافظ على النتائج المكتملة فقط.
+    let billingBlocked = false;
     // نصوص فشل الخادم فعلياً بتحليل ردّ الـAI الخاص بها (رد مبتور/غير صالح) —
     // لا تُعلَّم كـ"مفحوصة" فتبقى مؤهّلة تلقائياً للفحص القادم بدل ضياعها بصمت.
     const failedKeysTotal = new Set<string>();
@@ -989,7 +992,8 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
           if (data?.error) {
             // أظهر الخطأ في الأداة وفي toast لضمان رؤيته (الـ toast قد يُفوت).
             encounteredError = true;
-            const displayError = explainEnhancementProviderError(effectiveProvider, data.error);
+            if (isEnhancementBillingError(String(data.error))) billingBlocked = true;
+            const displayError = explainEnhancementProviderError(effectiveProvider, String(data.error));
             setLastError(displayError);
             toast({ title: displayError, variant: "destructive" });
             return { data: null, count: 0 };
@@ -1024,7 +1028,8 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
               if (retryError) throw retryError;
               if (data?.error) {
                 encounteredError = true;
-                const displayError = explainEnhancementProviderError(effectiveProvider, data.error);
+                if (isEnhancementBillingError(String(data.error))) billingBlocked = true;
+                const displayError = explainEnhancementProviderError(effectiveProvider, String(data.error));
                 setLastError(displayError);
                 toast({ title: displayError, variant: "destructive" });
                 return { data: null, count: 0 };
@@ -1059,6 +1064,7 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
               if (body?.error) detail = String(body.error);
             }
           } catch { /* ignore body-read failures */ }
+          if (isEnhancementBillingError(detail)) billingBlocked = true;
           const msg = explainEnhancementProviderError(effectiveProvider, `فشل الاتصال بـ enhance-translations: ${detail.slice(0, 400)}`);
           encounteredError = true;
           setLastError(msg);
@@ -1075,6 +1081,11 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
       }
 
       setProgress({ current: Math.min(processed, translatedEntries.length), total: translatedEntries.length });
+      if (billingBlocked) {
+        // لم نفحص الدفعات المتبقية؛ ستبقى قابلة لإعادة المحاولة بعد إصلاح المزوّد.
+        setStatusMessage("توقف الفحص: رصيد المزوّد غير كافٍ. النتائج السابقة محفوظة.");
+        break;
+      }
       if (isCerebrasActive && i + effectiveParallel < batches.length && !abortSignal.aborted) {
         setStatusMessage('Cerebras: انتظار 3 ثوانٍ بين دفعات المراجعة…');
         try { await waitForReviewCooldown(3_000, abortSignal); }
@@ -1949,6 +1960,18 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
           </div>
         )}
 
+        {/* اعرض مسار المزود الحقيقي قبل أن يبدأ فحص قد يستهلك رصيد Lovable. */}
+        <p className="text-[11px] text-muted-foreground rounded border p-2" dir="rtl">
+          مزوّد الفحص: <strong>{
+            inferProviderFromModel(model) || translationProvider || readLocalStorage('translationProvider') || 'gemini'
+          }</strong> · النموذج: <span dir="ltr">{model}</span> · التوجيه: <strong>{
+            aiRoutingModeProp || readLocalStorage('aiRoutingMode') || 'auto'
+          }</strong>.
+          {(aiRoutingModeProp || readLocalStorage('aiRoutingMode') || 'auto') !== 'free' &&
+            !inferProviderFromModel(model) &&
+            ['gemini', 'google', ''].includes(translationProvider || readLocalStorage('translationProvider')) &&
+            " قد يستخدم Gemini بوابة Lovable المدفوعة في الوضع التلقائي أو عند غياب مفتاح Gemini."}
+        </p>
         {/* Inline error banner — أظهر أسباب الفشل داخل الأداة (ليس فقط toast) */}
         {lastError && (
           <div className="flex items-start gap-2 p-3 rounded-md bg-destructive/10 border border-destructive/30 text-destructive">

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
-import { explainEnhancementProviderError } from "@/lib/enhance-provider-error";
+import { explainEnhancementProviderError, isEnhancementBillingError } from "@/lib/enhance-provider-error";
 
 describe("Cerebras enhancement routing and deployment diagnostics", () => {
   const server = readFileSync("supabase/functions/enhance-translations/index.ts", "utf8");
@@ -31,7 +31,19 @@ describe("Cerebras enhancement routing and deployment diagnostics", () => {
     expect(mapped).toContain("enhance-translations/index.ts");
     expect(mapped).toContain("ليس نفاد رصيد Cerebras");
     expect(mapped).toContain(oldError);
-    expect(explainEnhancementProviderError("gemini", oldError)).toBe(oldError);
+    expect(explainEnhancementProviderError("gemini", oldError)).toContain("انتهى رصيد Lovable Gateway");
+  });
+
+  it("recognizes payment errors and advises a direct provider instead of misreporting the translator", () => {
+    expect(isEnhancementBillingError("الرصيد غير كافٍ على Lovable Gateway")).toBe(true);
+    expect(isEnhancementBillingError("HTTP 402")).toBe(true);
+    expect(isEnhancementBillingError("HTTP 429")).toBe(false);
+    const guidance = explainEnhancementProviderError("gemini", "الرصيد غير كافٍ على Lovable Gateway");
+    expect(guidance).toContain("مجاني فقط");
+    expect(guidance).toContain("مفتاح Google API");
+    expect(panel).toContain("if (billingBlocked) {");
+    expect(panel).toContain("if (isEnhancementBillingError(String(data.error))) billingBlocked = true;");
+    expect(panel).toContain("if (isEnhancementBillingError(detail)) billingBlocked = true;");
   });
 
   it("does not hide real Cerebras quota or authentication errors", () => {

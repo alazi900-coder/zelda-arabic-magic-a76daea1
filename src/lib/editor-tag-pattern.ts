@@ -89,7 +89,9 @@ export function editorTagPattern(msbtFile?: string): RegExp {
   // Crashlands writes a line break as `#`, so the Xenoblade colour rule (`#0`-
   // `#5`) would swallow it and leave the break itself unmarked -- the one token
   // whose loss silently runs two lines together.
-  const rules = msbtFile?.startsWith("platinum/")
+  const rules = msbtFile?.startsWith("black2/")
+    ? [...RULES.filter(rule => rule !== HASH_COLOUR_RULE)]
+    : msbtFile?.startsWith("platinum/")
     ? [...RULES.filter((rule) => rule !== HASH_COLOUR_RULE), PLAT_BREAK_RULE]
     // Inazuma's page break, held as `▼` for the same reason -- see
     // inazuma/inazuma-break-tokens.ts.

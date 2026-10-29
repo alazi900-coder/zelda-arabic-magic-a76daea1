@@ -122,6 +122,11 @@ export default function PlatinumText() {
           />
         </label>
 
+        <Link to="/platinum/black2" className="mt-6 flex items-center justify-between gap-4 rounded-xl border border-blue-500/35 bg-blue-500/5 p-5 transition hover:bg-blue-500/10">
+          <div><strong className="block text-lg">Pokémon Black 2</strong><span className="text-sm text-muted-foreground">قسم مستقل لتحرير JSON الكامل مع حماية وسوم التحكم</span></div>
+          <span className="shrink-0 rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white">فتح القسم</span>
+        </Link>
+
         <div className="mt-6 space-y-2 text-xs text-muted-foreground">
           <p>
             <strong className="text-foreground">حدّ الطول</strong> لكل سطر هو أطول رسالة أصلية في

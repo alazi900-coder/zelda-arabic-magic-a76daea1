@@ -49,6 +49,7 @@ import { categorizeMother3Entry } from "@/lib/mother3/categories";
 import { categorizeLumenTaleEntry } from "@/lib/lumentale/lumentale-categories";
 import { categorizeMetroidPrimeEntry } from "@/lib/metroid-prime/mp-categories";
 import { categorizePlatEntry } from "@/lib/nds/plat-categories";
+import { categorizeBlack2Entry, validateBlack2Translation } from "@/lib/pokemon-black2/black2-json";
 import { categorizePhEntry } from "@/lib/ph/ph-categories";
 import { categorizeSteinsGateEntry } from "@/lib/steinsgate/steinsgate-categories";
 import { analyzeSteinsGateUnsupportedCharacters, STEINSGATE_WORKSPACE_KEY, type SteinsGateUnsupportedCharacter } from "@/lib/steinsgate/steinsgate-format";
@@ -1433,12 +1434,13 @@ export function useEditorState() {
       const isTwom = e.msbtFile.startsWith('twom/');
       const isGtaSa = e.msbtFile.startsWith('gtasa/');
       const isPlat = e.msbtFile.startsWith('platinum/');
+      const isBlack2 = e.msbtFile.startsWith('black2/');
       const isPh = e.msbtFile.startsWith('ph/');
       const isInazuma = e.msbtFile.startsWith('inazuma/');
       const isGoldenSun = e.msbtFile.startsWith('goldensun/');
-      const isDr = !isBdat && !isRisen && !isMother3 && !isMetroidPrime && !isPkm && !isDs && !isLumenTale && !isGtaIv && !isSteinsGate && !isCrashlands && !isNinthDawn && !isFranBow && !isTwom && !isGtaSa && !isInazuma && !isGoldenSun && e.msbtFile.includes(':') && !e.msbtFile.startsWith('bdat');
+      const isDr = !isBdat && !isRisen && !isMother3 && !isMetroidPrime && !isPkm && !isDs && !isLumenTale && !isGtaIv && !isSteinsGate && !isCrashlands && !isNinthDawn && !isFranBow && !isTwom && !isGtaSa && !isInazuma && !isGoldenSun && !isBlack2 && e.msbtFile.includes(':') && !e.msbtFile.startsWith('bdat');
       const risenCat = isRisen ? categorizeRisenEntry(e) : undefined;
-      const matchCategory = filterCategory.length === 0 || filterCategory.includes(isBdat ? categorizeBdatTable(e.label, sourceFile, e.original) : isRisen ? risenCat! : isMother3 ? categorizeMother3Entry(e) : isMetroidPrime ? categorizeMetroidPrimeEntry(e) : isPkm ? categorizePkmEntry(e) : isDs ? categorizeDsEntry(e) : isLumenTale ? categorizeLumenTaleEntry(e) : isGtaIv ? categorizeGtaIvEntry(e) : isSteinsGate ? categorizeSteinsGateEntry(e) : isCrashlands ? categorizeCrashlandsEntry(e) : isNinthDawn ? categorizeNinthDawnEntry(e) : isFranBow ? categorizeFranBowEntry(e) : isTwom ? categorizeTwomEntry(e) : isGtaSa ? categorizeGtaSaEntry(e) : isPlat ? categorizePlatEntry(e) : isPh ? categorizePhEntry(e) : isInazuma ? categorizeInazumaEntry(e) : isGoldenSun ? categorizeGoldenSunEntry(e) : isDr ? categorizeDanganronpaFile(e.msbtFile) : categorizeFile(e.msbtFile));
+      const matchCategory = filterCategory.length === 0 || filterCategory.includes(isBdat ? categorizeBdatTable(e.label, sourceFile, e.original) : isRisen ? risenCat! : isMother3 ? categorizeMother3Entry(e) : isMetroidPrime ? categorizeMetroidPrimeEntry(e) : isPkm ? categorizePkmEntry(e) : isDs ? categorizeDsEntry(e) : isLumenTale ? categorizeLumenTaleEntry(e) : isGtaIv ? categorizeGtaIvEntry(e) : isSteinsGate ? categorizeSteinsGateEntry(e) : isCrashlands ? categorizeCrashlandsEntry(e) : isNinthDawn ? categorizeNinthDawnEntry(e) : isFranBow ? categorizeFranBowEntry(e) : isTwom ? categorizeTwomEntry(e) : isGtaSa ? categorizeGtaSaEntry(e) : isPlat ? categorizePlatEntry(e) : isBlack2 ? categorizeBlack2Entry(e) : isPh ? categorizePhEntry(e) : isInazuma ? categorizeInazumaEntry(e) : isGoldenSun ? categorizeGoldenSunEntry(e) : isDr ? categorizeDanganronpaFile(e.msbtFile) : categorizeFile(e.msbtFile));
       const matchRisenOwner = !isRisen || !filterRisenOwner || risenCat !== "risen-dialogue" ||
         (e.risenOwner?.trim() || NO_OWNER_LABEL) === filterRisenOwner;
       const matchRisenItemPrefix = !isRisen || !filterRisenItemPrefix || risenCat !== "risen-items" ||
@@ -1623,6 +1625,13 @@ export function useEditorState() {
       finalValue = normalizeBreakStyleToSource(entry.original, finalValue);
     }
 
+    if (entry?.msbtFile.startsWith("black2/") && finalValue.trim()) {
+      const issue = validateBlack2Translation(entry.original, finalValue);
+      if (issue) {
+        toast({ title: "رُفض حفظ ترجمة Black 2", description: issue, variant: "destructive" });
+        return;
+      }
+    }
     if (entry?.msbtFile.startsWith("lumentale/") && finalValue.trim()) {
       const validationError = validateLumenTaleTranslation(entry.original, finalValue);
       if (validationError) {

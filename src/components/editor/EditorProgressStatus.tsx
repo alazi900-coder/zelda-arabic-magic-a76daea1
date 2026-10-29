@@ -17,6 +17,7 @@ import { buildPkmCategories, PKM_FILE_RE } from "@/lib/pokemon/pkm-categories";
 import { buildLumenTaleCategories } from "@/lib/lumentale/lumentale-categories";
 import { GTAIV_CATEGORIES } from "@/lib/gtaiv/gtaiv-categories";
 import { PLATINUM_CATEGORIES } from "@/lib/nds/plat-categories";
+import { BLACK2_CATEGORIES } from "@/lib/pokemon-black2/black2-json";
 import { PH_CATEGORIES } from "@/lib/ph/ph-categories";
 import { STEINSGATE_CATEGORIES } from "@/lib/steinsgate/steinsgate-categories";
 import { CRASHLANDS_CATEGORIES } from "@/lib/crashlands/crashlands-categories";
@@ -84,6 +85,7 @@ const EditorProgressStatus: React.FC<EditorProgressStatusProps> = ({
   const isTwom = !!entries?.some((e) => e.msbtFile.startsWith("twom/"));
   const isGtaSa = !!entries?.some((e) => e.msbtFile.startsWith("gtasa/"));
   const isPlatinum = !!entries?.some((e) => e.msbtFile.startsWith("platinum/"));
+  const isBlack2 = !!entries?.some((e) => e.msbtFile.startsWith("black2/"));
   const isPh = !!entries?.some((e) => e.msbtFile.startsWith("ph/"));
   const isInazuma = !!entries?.some((e) => e.msbtFile.startsWith("inazuma/"));
   const isGoldenSun = !!entries?.some((e) => e.msbtFile.startsWith("goldensun/"));
@@ -136,8 +138,8 @@ const EditorProgressStatus: React.FC<EditorProgressStatusProps> = ({
         twomCategories={TWOM_CATEGORIES}
         isGtaSa={isGtaSa}
         gtaSaCategories={GTASA_CATEGORIES}
-        isPlatinum={isPlatinum}
-        platinumCategories={PLATINUM_CATEGORIES}
+        isPlatinum={isPlatinum || isBlack2}
+        platinumCategories={isBlack2 ? BLACK2_CATEGORIES : PLATINUM_CATEGORIES}
         isPh={isPh}
         phCategories={PH_CATEGORIES}
         isInazuma={isInazuma}

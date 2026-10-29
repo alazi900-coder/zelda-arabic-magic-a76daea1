@@ -27,6 +27,7 @@ export const AI_PROFILE_NAMES: Record<AiGameProfile, string> = {
   metroidprime: "Metroid Prime Remastered",
   pokemon: "Pokémon Ruby Destiny",
   platinum: "Pokémon Platinum",
+  black2: "Pokémon Black 2",
   "pokemon-xp": "Pokémon Unbreakable Ties",
   lumentale: "LumenTale",
   gtaiv: "GTA IV",
@@ -55,6 +56,9 @@ export function profileDefaultPrompt(profile: AiGameProfile): string {
   }
   if (profile === "goldensun") {
     return "اللعبة: Golden Sun (الجزء الأول). احفظ اتساق Isaac وGaret وIvan وMia والمصطلحات المعتمدة في القاموس.\n" + GOLDEN_SUN_AI_PROFILE_PROMPT;
+  }
+  if (profile === "black2") {
+    return "اللعبة Pokémon Black 2. ترجم المعنى إلى العربية الطبيعية دون تشكيل بصري أو قلب الحروف. أبق كل [CTRL:...] و[CHAR:...] حرفيًا وفي ترتيبه الصحيح ولا تغيّر عدد فواصل الأسطر. لا تغيّر معرفات البنوك أو النصوص؛ لا تستخدم قواعد Pokémon Platinum التقنية الخاصة ببناء الروم.";
   }
   if (profile === "generic") {
     return "راجع النص العربي مقابل الأصل. لا تفترض أي لعبة أو أسماء أو رموز غير موجودة في النص أو القاموس. احتفظ بالرموز التقنية كما هي.";

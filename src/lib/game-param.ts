@@ -35,6 +35,7 @@ export type GameParam =
   | "metroidprime"
   | "pokemon"
   | "platinum"
+  | "black2"
   | "pokemon-xp"
   | "lumentale"
   | "gtaiv"
@@ -59,6 +60,7 @@ export function resolveGameParam(
   if (/^TEXT_/.test(f)) return "metroidprime";
   if (f.startsWith("pokemon-xp/")) return "pokemon-xp";
   if (f.startsWith("platinum/")) return "platinum";
+  if (f.startsWith("black2/")) return "black2";
   if (PKM_FILE_RE.test(f)) return "pokemon";
   if (f.startsWith("lumentale/")) return "lumentale";
   if (f.startsWith("gtaiv/")) return "gtaiv";

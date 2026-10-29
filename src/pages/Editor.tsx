@@ -27,6 +27,7 @@ import { lumentaleCategories } from "@/lib/lumentale/lumentale-categories";
 import { LUMENTALE_META_KEY } from "@/lib/lumentale/lumentale-editor-bridge";
 import { GTAIV_CATEGORIES } from "@/lib/gtaiv/gtaiv-categories";
 import { PLATINUM_CATEGORIES } from "@/lib/nds/plat-categories";
+import { BLACK2_CATEGORIES } from "@/lib/pokemon-black2/black2-json";
 import { PH_CATEGORIES } from "@/lib/ph/ph-categories";
 import { STEINSGATE_CATEGORIES } from "@/lib/steinsgate/steinsgate-categories";
 import { CRASHLANDS_CATEGORIES } from "@/lib/crashlands/crashlands-categories";
@@ -185,6 +186,7 @@ const Editor = () => {
   const isGtaSaEntries = editor.state?.entries?.[0]?.msbtFile.startsWith("gtasa/") ?? false;
   const isFe12Entries = editor.state?.entries?.[0]?.msbtFile.startsWith("fe12/") ?? false;
   const isPlatinumEntries = editor.state?.entries?.[0]?.msbtFile.startsWith("platinum/") ?? false;
+  const isBlack2Entries = editor.state?.entries?.[0]?.msbtFile.startsWith("black2/") ?? false;
   const isInazumaEntries = editor.state?.entries?.[0]?.msbtFile.startsWith("inazuma/") ?? false;
   const isPhEntries = editor.state?.entries?.[0]?.msbtFile.startsWith("ph/") ?? false;
   const isGoldenSunEntries = editor.state?.entries?.[0]?.msbtFile.startsWith("goldensun/") ?? false;
@@ -219,7 +221,9 @@ const Editor = () => {
   // "Back" link target — must match whichever tool actually loaded the
   // entries, not just default to Xenoblade's /process for every game that
   // isn't Risen (Mother 3 and Metroid Prime were falling through to it).
-  const processPath = isMother3Entries
+  const processPath = isBlack2Entries
+    ? "/platinum/black2"
+    : isMother3Entries
     ? "/mother3"
     : isMetroidPrimeEntries
     ? "/metroid-prime/text"
@@ -274,12 +278,13 @@ const Editor = () => {
     if (isTwomEntries) return TWOM_CATEGORIES;
     if (isGtaSaEntries) return GTASA_CATEGORIES;
     if (isPlatinumEntries) return PLATINUM_CATEGORIES;
+    if (isBlack2Entries) return BLACK2_CATEGORIES;
     if (isInazumaEntries) return INAZUMA_CATEGORIES;
     if (isPhEntries) return PH_CATEGORIES;
     if (isGoldenSunEntries) return GOLDENSUN_CATEGORIES;
     if (editor.bdatTableNames.length > 0) return BDAT_CATEGORIES;
     return FILE_CATEGORIES;
-  }, [editor.state?.entries, isRisenEntries, isMother3Entries, isMetroidPrimeEntries, isPokemonXpEntries, isPokemonEntries, isDragonSwordEntries, isKingdomHeartsEntries, isLumenTaleEntries, isGtaIvEntries, isSteinsGateEntries, isCrashlandsEntries, isNinthDawnEntries, isFranBowEntries, isTwomEntries, isGtaSaEntries, isPlatinumEntries, isInazumaEntries, isPhEntries, isGoldenSunEntries, editor.bdatTableNames]);
+  }, [editor.state?.entries, isRisenEntries, isMother3Entries, isMetroidPrimeEntries, isPokemonXpEntries, isPokemonEntries, isDragonSwordEntries, isKingdomHeartsEntries, isLumenTaleEntries, isGtaIvEntries, isSteinsGateEntries, isCrashlandsEntries, isNinthDawnEntries, isFranBowEntries, isTwomEntries, isGtaSaEntries, isPlatinumEntries, isBlack2Entries, isInazumaEntries, isPhEntries, isGoldenSunEntries, editor.bdatTableNames]);
 
   const activeCategory = editor.filterCategory.length === 1
     ? (() => {

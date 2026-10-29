@@ -25,6 +25,7 @@ import { countEffectiveLines } from "@/lib/text-tokens";
 import { hasRisenTags, diffRisenTags } from "@/lib/risen-tag-guard";
 import { diffPkmTags } from "@/lib/pokemon/pkm-tag-mask";
 import { diffPlatTags } from "@/lib/nds/plat-tag-mask";
+import { validateBlack2Translation } from "@/lib/pokemon-black2/black2-json";
 import { PLAT_FILE_RE } from "@/lib/nds/plat-editor-bridge";
 import { pkmOverlongLines, PKM_DIALOGUE_LINE_PIXELS } from "@/lib/pokemon/pkm-charmap";
 import { PKM_FILE_RE } from "@/lib/pokemon/pkm-categories";
@@ -480,6 +481,12 @@ export function detectIssues(entry: DetectableEntry, translation: string): Diagn
   // it would call it "a technical token" and leave the translator to work out
   // what that costs. It costs a character their name in every line that
   // greeted them by it, so it is worth naming.
+  // Black 2: exact control words and newline positions are part of the ROM message format.
+  if (entry.msbtFile.startsWith("black2/") && trimmed) {
+    const issue = validateBlack2Translation(entry.original, translation);
+    if (issue) issues.push({ ...base, severity: "critical", category: "black2_token_mismatch", message: issue });
+  }
+
   // 19. Platinum's runtime tags
   //
   // `{STRVAR_1 3, 0, 0}` is where the game drops a name, a number, an item;

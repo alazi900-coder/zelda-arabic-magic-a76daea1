@@ -7,6 +7,7 @@
 import type { EditorState } from "@/components/editor/types";
 import { isSteinsGateTranslatable, repairSteinsGateTags, validateSteinsGateTags } from "./steinsgate/steinsgate-tags";
 import { hasRisenTags, restoreRisenTags } from "./risen-tag-guard";
+import { validateBlack2Translation } from "./pokemon-black2/black2-json";
 import { normalizeBreakStyleToSource } from "./balance-lines";
 import { validateLumenTaleTranslation } from "./lumentale/lumentale-token-guard";
 import { repairGtaIvDollarAmountSequence, validateGtaIvDollarAmountSequence, validateGtaIvRuntimeTokenSequence } from "./gtaiv/gxt-format";
@@ -35,6 +36,7 @@ export function mergeGuardedTranslations(
       if (!validateSteinsGateTags(entry.original, value).valid) continue;
     }
 
+    if (entry?.msbtFile.startsWith("black2/") && value.trim() && validateBlack2Translation(entry.original, value)) continue;
     const isRisenEntry = !!entry && /\.tab$/i.test(entry.msbtFile);
     if (isRisenEntry && entry && hasRisenTags(entry.original) && value.trim()) {
       const repaired = restoreRisenTags(entry.original, value);

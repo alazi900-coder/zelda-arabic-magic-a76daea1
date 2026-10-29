@@ -52,6 +52,7 @@ const Pokemon = lazyWithIgnoredRef(() => import("./pages/Pokemon"));
 const PokemonFont = lazyWithIgnoredRef(() => import("./pages/PokemonFont"));
 const PokemonText = lazyWithIgnoredRef(() => import("./pages/PokemonText"));
 const PlatinumText = lazyWithIgnoredRef(() => import("./pages/PlatinumText"));
+const Black2Text = lazyWithIgnoredRef(() => import("./pages/Black2Text"));
 const PokemonUnbreakableTies = lazyWithIgnoredRef(() => import("./pages/PokemonUnbreakableTies"));
 const OAuthConsent = lazyWithIgnoredRef(() => import("./pages/OAuthConsent"));
 const KingdomHeartsBBS = lazyWithIgnoredRef(() => import("./pages/KingdomHeartsBBS"));
@@ -121,6 +122,7 @@ const App = () => (
                 <Route path="/pokemon/font" element={<ErrorBoundary fallbackTitle="خطأ في أداة خط Pokémon Ruby Destiny"><PokemonFont /></ErrorBoundary>} />
                 <Route path="/pokemon/text" element={<ErrorBoundary fallbackTitle="خطأ في أداة نصوص Pokémon Ruby Destiny"><PokemonText /></ErrorBoundary>} />
                 <Route path="/platinum/text" element={<ErrorBoundary fallbackTitle="خطأ في أداة نصوص Pokémon Platinum"><PlatinumText /></ErrorBoundary>} />
+                <Route path="/platinum/black2" element={<ErrorBoundary fallbackTitle="خطأ في محرر Pokémon Black 2"><Black2Text /></ErrorBoundary>} />
                 <Route path="/pokemon-unbreakable-ties" element={<ErrorBoundary fallbackTitle="خطأ في نصوص Pokémon Unbreakable Ties"><PokemonUnbreakableTies /></ErrorBoundary>} />
                 <Route path="/mother3" element={<ErrorBoundary fallbackTitle="خطأ في أداة Mother 3"><Mother3 /></ErrorBoundary>} />
                 <Route path="/ph-logo" element={<ErrorBoundary fallbackTitle="خطأ في أداة شعار Phantom Hourglass"><PhLogo /></ErrorBoundary>} />

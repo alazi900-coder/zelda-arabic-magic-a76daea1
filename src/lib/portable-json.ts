@@ -12,6 +12,7 @@
  */
 import type { ExtractedEntry } from "@/components/editor/types";
 import { detectIssues } from "@/lib/diagnostic-detect";
+import { black2EntryKeyFromId } from "@/lib/pokemon-black2/black2-json";
 
 export interface PortableJsonRow {
   id: string;
@@ -109,6 +110,7 @@ export function parsePortableJson(
     const source = pickString(row, ["source", "english", "original", "en"]) ?? "";
     const arabic = pickString(row, ["arabic", "translation", "target", "ar"]) ?? "";
     let id = pickString(row, ["id", "key"]) ?? "";
+    if (id.startsWith("a/") && entries[0]?.msbtFile.startsWith("black2/")) id = black2EntryKeyFromId(id) ?? id;
     if (!id && typeof row.table === "string" && typeof row.hash === "string" && /^[0-9a-f]{1,8}$/i.test(row.hash)) {
       id = `gtasa/${row.table}:${parseInt(row.hash, 16)}`;
     }

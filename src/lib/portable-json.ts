@@ -55,6 +55,7 @@ const TOKEN_DAMAGE_CATEGORIES = new Set([
   "twom_tag_mismatch",
   "inazuma_tag_mismatch",
   "plat_tag_mismatch",
+  "black2_token_mismatch",
   "risen_tag_mismatch",
   "format_specifier_mismatch",
   "double_shaped",

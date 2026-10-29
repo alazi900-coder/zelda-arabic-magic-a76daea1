@@ -77,6 +77,9 @@ interface CategoryProgressProps {
   /** Eight filters over the export's 127 tables (gtasa-categories.ts). */
   gtaSaCategories?: FileCategory[];
   isPlatinum?: boolean;
+  /** Pokémon Black 2 uses its own bank-based categories, not Platinum categories. */
+  isBlack2?: boolean;
+  black2Categories?: FileCategory[];
   /** Fixed list from the decompilation's archive names (see src/lib/nds/plat-categories.ts). */
   platinumCategories?: FileCategory[];
   isPh?: boolean;
@@ -90,8 +93,8 @@ interface CategoryProgressProps {
   goldenSunCategories?: FileCategory[];
 }
 
-const CategoryProgress: React.FC<CategoryProgressProps> = ({ categoryProgress, filterCategory, setFilterCategory, damagedTagsCount = 0, onFilterDamagedTags, isDamagedTagsActive, onFixDamagedTags, isFixing, onLocalFixDamagedTags, onRedistributeTags, tagsCount = 0, isBdat = false, isDanganronpa = false, isRisen = false, risenCategories = [], isMother3 = false, mother3Categories = [], isMetroidPrime = false, metroidPrimeCategories = [], isPokemon = false, pokemonCategories = [], isLumenTale = false, lumentaleCategories = [], isGtaIv = false, gtaIvCategories = [], isSteinsGate = false, steinsGateCategories = [], isCrashlands = false, crashlandsCategories = [], isNinthDawn = false, ninthDawnCategories = [], isFranBow = false, franBowCategories = [], isTwom = false, twomCategories = [], isGtaSa = false, gtaSaCategories = [], isPlatinum = false, platinumCategories = [], isPh = false, phCategories = [], isInazuma = false, inazumaCategories = [], isGoldenSun = false, goldenSunCategories = [] }) => {
-  const categories = isRisen ? risenCategories : isMother3 ? mother3Categories : isMetroidPrime ? metroidPrimeCategories : isPokemon ? pokemonCategories : isLumenTale ? lumentaleCategories : isGtaIv ? gtaIvCategories : isSteinsGate ? steinsGateCategories : isCrashlands ? crashlandsCategories : isNinthDawn ? ninthDawnCategories : isFranBow ? franBowCategories : isTwom ? twomCategories : isGtaSa ? gtaSaCategories : isPlatinum ? platinumCategories : isPh ? phCategories : isInazuma ? inazumaCategories : isGoldenSun ? goldenSunCategories : isDanganronpa ? DR_CATEGORIES : isBdat ? BDAT_CATEGORIES : FILE_CATEGORIES;
+const CategoryProgress: React.FC<CategoryProgressProps> = ({ categoryProgress, filterCategory, setFilterCategory, damagedTagsCount = 0, onFilterDamagedTags, isDamagedTagsActive, onFixDamagedTags, isFixing, onLocalFixDamagedTags, onRedistributeTags, tagsCount = 0, isBdat = false, isDanganronpa = false, isRisen = false, risenCategories = [], isMother3 = false, mother3Categories = [], isMetroidPrime = false, metroidPrimeCategories = [], isPokemon = false, pokemonCategories = [], isLumenTale = false, lumentaleCategories = [], isGtaIv = false, gtaIvCategories = [], isSteinsGate = false, steinsGateCategories = [], isCrashlands = false, crashlandsCategories = [], isNinthDawn = false, ninthDawnCategories = [], isFranBow = false, franBowCategories = [], isTwom = false, twomCategories = [], isGtaSa = false, gtaSaCategories = [], isPlatinum = false, platinumCategories = [], isBlack2 = false, black2Categories = [], isPh = false, phCategories = [], isInazuma = false, inazumaCategories = [], isGoldenSun = false, goldenSunCategories = [] }) => {
+  const categories = isRisen ? risenCategories : isMother3 ? mother3Categories : isMetroidPrime ? metroidPrimeCategories : isPokemon ? pokemonCategories : isLumenTale ? lumentaleCategories : isGtaIv ? gtaIvCategories : isSteinsGate ? steinsGateCategories : isCrashlands ? crashlandsCategories : isNinthDawn ? ninthDawnCategories : isFranBow ? franBowCategories : isTwom ? twomCategories : isGtaSa ? gtaSaCategories : isPlatinum ? platinumCategories : isBlack2 ? black2Categories : isPh ? phCategories : isInazuma ? inazumaCategories : isGoldenSun ? goldenSunCategories : isDanganronpa ? DR_CATEGORIES : isBdat ? BDAT_CATEGORIES : FILE_CATEGORIES;
   const activeCats = categories.filter(cat => categoryProgress[cat.id]);
   if (activeCats.length === 0 && (isLumenTale || !categoryProgress['other'])) return null;
 

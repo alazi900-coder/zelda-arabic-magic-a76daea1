@@ -40,6 +40,7 @@ import { isTranslationExcludedText, type ExtractedEntry } from "./types";
 import { EnhanceRulesDialog } from "./EnhanceRulesDialog";
 import { explainEnhancementProviderError, isEnhancementBillingError } from "@/lib/enhance-provider-error";
 import { DEFAULT_ENHANCE_SCAN_LIMIT, selectEnhanceScanRound, type EnhanceScanLimit } from "@/lib/enhance-scan-round";
+import { groupExactEnhanceEntries, expandExactEnhanceItems, type EnhanceBatchEntry } from "@/lib/enhance-exact-dedup";
 import {
   getActiveEnhancementRules, buildActiveEnhancementInstructions,
   filterDirectEnhancementFindings,
@@ -840,6 +841,11 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
     setProcessedCount(processedKeysRef.current.size);
     setProgress({ current: processed, total: translatedEntries.length });
 
+    // Identical source + Arabic + MSBT section + category => identical review
+    // context. Review one representative and fan out its findings to all keys.
+    // Never combine the same wording across different banks/sections.
+    const exactGroups = groupExactEnhanceEntries(cacheMissEntries);
+
     const isTokenRouterActive = effectiveProvider === 'tokenrouter';
     const isGmiCloudActive = effectiveProvider === 'gmicloud';
     // MiniMax may temporarily reject large parallel bursts; use small serial batches
@@ -853,9 +859,28 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
     // Cerebras already uses 10-text serial batches; its TPM quota still
     // requires pacing plus a retry on actual HTTP 429 (never on HTTP 402).
     const batches: { textsToAnalyze: { key: string; original: string; translation: string; category?: string }[] }[] = [];
-    for (let i = 0; i < cacheMissEntries.length; i += effectiveBatchSize) {
-      batches.push({ textsToAnalyze: cacheMissEntries.slice(i, i + effectiveBatchSize) });
+    for (let i = 0; i < exactGroups.unique.length; i += effectiveBatchSize) {
+      batches.push({ textsToAnalyze: exactGroups.unique.slice(i, i + effectiveBatchSize) });
     }
+    const expandSuccessfulBatch = (
+      texts: EnhanceBatchEntry[],
+      data: { suggestions?: EnhanceSuggestion[]; issues?: GrammarIssue[]; results?: Array<Record<string, unknown>>; _meta?: { failedKeys?: string[]; providerFallback?: string } },
+    ) => {
+      const failed = new Set(data?._meta?.failedKeys || []);
+      const allTexts = texts.flatMap(t => exactGroups.members.get(t.key) || [t]);
+      const expandedFailedKeys = texts.filter(t => failed.has(t.key))
+        .flatMap(t => (exactGroups.members.get(t.key) || [t]).map(item => item.key));
+      return {
+        allTexts,
+        data: {
+          ...data,
+          suggestions: expandExactEnhanceItems(data.suggestions, exactGroups.members),
+          issues: expandExactEnhanceItems(data.issues, exactGroups.members),
+          results: expandExactEnhanceItems(data.results, exactGroups.members),
+          _meta: { ...data._meta, failedKeys: expandedFailedKeys },
+        },
+      };
+    };
 
     // خزّن نتيجة كلّ نصّ من دفعة حقيقيّة في الكاش (موجَبة أو null="لا مشكلة") —
     // مشتركة بين مسار النجاح الأوّل ومسار إعادة المحاولة بعد 429.
@@ -1019,16 +1044,17 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
             fallbackNoticeShownRef.current = true;
             toast({ title: "🔄 تم التحويل تلقائياً إلى Gemini", description: "DeepSeek كان مشغولاً أو غير متاح، فأُكمل الفحص عبر Gemini بدلاً منه." });
           }
-          const failedKeys: string[] = Array.isArray(data?._meta?.failedKeys) ? data._meta.failedKeys : [];
+          const expanded = expandSuccessfulBatch(textsToAnalyze, data);
+          const failedKeys: string[] = expanded.data._meta.failedKeys || [];
           const failedKeySet = new Set(failedKeys);
           for (const k of failedKeys) failedKeysTotal.add(k);
-          for (const t of textsToAnalyze) {
+          for (const t of expanded.allTexts) {
             if (failedKeySet.has(t.key)) continue; // لم يُفحص فعلياً — لا تُعلَّم كمفحوص.
             processedKeysRef.current.set(t.key, t.translation);
           }
           setProcessedCount(processedKeysRef.current.size);
-          await storeCacheForBatch(textsToAnalyze.filter(t => !failedKeySet.has(t.key)), data);
-          return { data, count: textsToAnalyze.length };
+          await storeCacheForBatch(expanded.allTexts.filter(t => !failedKeySet.has(t.key)), expanded.data);
+          return { data: expanded.data, count: expanded.allTexts.length };
         } catch (err) {
           const errStr = String(err);
           // إذا المستخدم ضغط إيقاف تجاهل الخطأ بصمت (لا تعرض توست ولا تعيد المحاولة).
@@ -1052,17 +1078,18 @@ const TranslationAIEnhancePanel: React.FC<TranslationAIEnhancePanelProps> = ({
                 return { data: null, count: 0 };
               }
               {
-                const failedKeys: string[] = Array.isArray(data?._meta?.failedKeys) ? data._meta.failedKeys : [];
+                const expanded = expandSuccessfulBatch(textsToAnalyze, data);
+                const failedKeys: string[] = expanded.data._meta.failedKeys || [];
                 const failedKeySet = new Set(failedKeys);
                 for (const k of failedKeys) failedKeysTotal.add(k);
-                for (const t of textsToAnalyze) {
+                for (const t of expanded.allTexts) {
                   if (failedKeySet.has(t.key)) continue;
                   processedKeysRef.current.set(t.key, t.translation);
                 }
                 setProcessedCount(processedKeysRef.current.size);
-                await storeCacheForBatch(textsToAnalyze.filter(t => !failedKeySet.has(t.key)), data);
+                await storeCacheForBatch(expanded.allTexts.filter(t => !failedKeySet.has(t.key)), expanded.data);
+                return { data: expanded.data, count: expanded.allTexts.length };
               }
-              return { data, count: textsToAnalyze.length };
             } catch (retryErr) {
               const msg = `فشل بعد إعادة المحاولة: ${String(retryErr).slice(0, 200)}`;
               encounteredError = true;

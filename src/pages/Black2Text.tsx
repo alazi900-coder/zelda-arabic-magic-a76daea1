@@ -15,11 +15,19 @@ export default function Black2Text() {
   const [dragOver, setDragOver] = useState(false);
   const navigate = useNavigate();
 
+  // FileReader works on Android WebView with large exported JSON files.
+  const readJsonFile = (file: File): Promise<string> => new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(typeof reader.result === "string" ? reader.result : "");
+    reader.onerror = () => reject(reader.error ?? new Error("فشل قراءة ملف JSON"));
+    reader.readAsText(file, "utf-8");
+  });
+
   const loadFile = async (file: File) => {
     if (!/\.json$/i.test(file.name)) { toast.error("اختر ملف JSON الخاص بـ Pokémon Black 2"); return; }
     setBusy(true);
     try {
-      const { document, entries, translations } = parseBlack2Json(await file.text());
+      const { document, entries, translations } = parseBlack2Json(await readJsonFile(file));
       const saved = await idbGet<{ entries: ExtractedEntry[]; translations: Record<string, string> }>(
         "editorState:black2"
       );
@@ -44,7 +52,7 @@ export default function Black2Text() {
       await idbSet("originalTexts", Object.fromEntries(entries.map(e => [e.msbtFile + ":" + e.index, e.original])));
       await idbSet("editor-source-game", BLACK2_SOURCE_GAME);
       await idbSet("editorState", snapshot);
-      toast.success("تم فتح " + entries.length.toLocaleString("ar") + " نصًا من Pokémon Black 2");
+      toast.success("تم فتح " + entries.length.toLocaleString("ar") + " نصًا من Pokémon Black 2 — اختر بطاقات الفلاتر أعلى المحرر");
       navigate("/editor");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "تعذر فتح ملف الترجمة");
@@ -100,8 +108,8 @@ export default function Black2Text() {
           className={"flex cursor-pointer flex-col items-center gap-3 rounded-xl border-2 border-dashed p-10 text-center transition " + (dragOver ? "border-primary bg-primary/5" : "border-muted")}
         >
           {busy ? <Loader2 className="h-9 w-9 animate-spin" /> : <Upload className="h-9 w-9 text-primary" />}
-          <strong>ارفع Pokemon-Black-2-All-Texts-Arabic-Template.json</strong>
-          <span className="text-sm text-muted-foreground">يدعم 80 ألف نص وأكثر من ألف بنك رسائل، بما فيها الحوارات والقوائم والأدوات</span>
+          <strong>ارفع Pokemon-Black-2-English-Translatable-Texts.json</strong>
+          <span className="text-sm text-muted-foreground">ملفك الصحيح: 52,636 نصًا موزعة على 918 بنكًا • بطاقات فلاتر مستقلة في المحرر</span>
           <input type="file" accept=".json,application/json" disabled={busy} className="hidden"
             onChange={e => { const f = e.target.files?.[0]; if (f) void loadFile(f); e.target.value = ""; }} />
         </label>

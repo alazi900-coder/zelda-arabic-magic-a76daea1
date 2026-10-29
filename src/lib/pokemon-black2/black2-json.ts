@@ -139,24 +139,50 @@ export function exportBlack2Json(
   return { ...doc, entries: outputRows };
 }
 
-/** Categorization uses bank names and source category, never translated prose. */
+
+/** Bank-based cards for the real Black 2 JSON export. Numbered banks
+ * remain anonymous rather than guessing a category from their prose. */
 export const BLACK2_CATEGORIES: FileCategory[] = [
-  { id: "b2-dialogue", label: "القصة والحوارات والمناطق", emoji: "💬", icon: "MessageCircle", color: "text-violet-400" },
-  { id: "b2-battle", label: "المعارك والمدربون", emoji: "⚔️", icon: "Sword", color: "text-red-400" },
-  { id: "b2-pokemon", label: "البوكيمون والحركات والقدرات", emoji: "🐾", icon: "BookOpen", color: "text-emerald-400" },
-  { id: "b2-items", label: "الأدوات والمتاجر", emoji: "🎒", icon: "Backpack", color: "text-amber-400" },
-  { id: "b2-menu", label: "القوائم والنظام", emoji: "▤", icon: "Monitor", color: "text-sky-400" },
-  { id: "b2-network", label: "التبادل والاتصال", emoji: "🌐", icon: "Globe", color: "text-teal-400" },
-  { id: "b2-misc", label: "محتويات أخرى", emoji: "◌", icon: "LibraryBig", color: "text-slate-400" },
+  { id: "b2-story", label: "القصة وفريق بلازما", emoji: "📜", icon: "ScrollText", color: "text-violet-400" },
+  { id: "b2-cities", label: "المدن والبلدات", emoji: "🏙️", icon: "Home", color: "text-cyan-400" },
+  { id: "b2-routes", label: "الطرق والكهوف والمناطق", emoji: "🗺️", icon: "MapPin", color: "text-emerald-400" },
+  { id: "b2-global", label: "الحوارات والأحداث العامة", emoji: "💬", icon: "MessageCircle", color: "text-indigo-400" },
+  { id: "b2-trainers", label: "المدربون وأسماؤهم", emoji: "🎽", icon: "Users", color: "text-rose-400" },
+  { id: "b2-battle", label: "المعارك ومرافق القتال", emoji: "⚔️", icon: "Sword", color: "text-red-400" },
+  { id: "b2-pokemon", label: "البوكيمون والبوكيدكس", emoji: "🐾", icon: "BookOpen", color: "text-green-400" },
+  { id: "b2-moves", label: "الحركات والقدرات والأنواع", emoji: "✨", icon: "Sparkles", color: "text-yellow-400" },
+  { id: "b2-items", label: "الأدوات والحقيبة والمتاجر", emoji: "🎒", icon: "Backpack", color: "text-amber-400" },
+  { id: "b2-menu", label: "القوائم والحفظ والنظام", emoji: "⚙️", icon: "Settings", color: "text-sky-400" },
+  { id: "b2-network", label: "الاتصال والتبادل", emoji: "🌐", icon: "Globe", color: "text-teal-400" },
+  { id: "b2-activities", label: "الأنشطة والمسابقات والميداليات", emoji: "🎬", icon: "Clapperboard", color: "text-pink-400" },
+  { id: "b2-words", label: "الكلمات والعبارات الجاهزة", emoji: "📝", icon: "MessageSquare", color: "text-orange-400" },
+  { id: "b2-script-other", label: "حوارات أماكن أخرى", emoji: "📍", icon: "Map", color: "text-blue-400" },
+  { id: "b2-system-other", label: "بنوك النظام غير المصنفة", emoji: "🗃️", icon: "FolderOpen", color: "text-slate-400" },
+  { id: "b2-additional", label: "الرسائل الإضافية", emoji: "➕", icon: "FileText", color: "text-lime-400" },
 ];
 
+/** Classify from the bank name and the original NARC archive, not translated text. */
 export function categorizeBlack2Entry(entry: ExtractedEntry): string {
-  const name = entry.label.split(" · ")[0].toLowerCase();
-  if (/item|bag|shop|mart|berry|medicine|sell|buy/.test(name)) return "b2-items";
-  if (/battle|btl|trainer|gym|subway|tower|fight/.test(name)) return "b2-battle";
-  if (/species|pokedex|pokeparam|pokemon|ability|move|nature|egg|evolution/.test(name)) return "b2-pokemon";
-  if (/gts|wifi|wi.fi|wireless|union|trade|comm|network|cgear|gsync/.test(name)) return "b2-network";
-  if (/menu|title|save|option|system|warning|error|medal|help|bag_pockets|box|input/.test(name)) return "b2-menu";
-  if (/^s\d+|event|route|city|town|plasma|forest|cave|script|story|field|demo/.test(name)) return "b2-dialogue";
-  return "b2-misc";
+  if (!entry.msbtFile.startsWith(BLACK2_PREFIX)) return "b2-system-other";
+  const bankName = entry.label.split(" · ")[0].toLowerCase();
+  const archive = entry.msbtFile.slice(BLACK2_PREFIX.length).split("/bank_")[0];
+
+  if (archive !== "a/0/0/2" && archive !== "a/0/0/3") return "b2-additional";
+  if (/(?:^|_)trainer(?:_|s\b)|trainer_class|trainer_names|trainer_messages|gym_leader|elite_four|champion_names|treehollow_trainer/.test(bankName)) return "b2-trainers";
+  if (/(?:^pms_|^easy_chat|^questionnaire|^hobbies|^job_answers|^event_phrase|^words_|_word_set|^word_set|^greetings|^phrase_)/.test(bankName)) return "b2-words";
+  if (/(?:^item|^bag_|_bag_|^bag$|^berry|^shop|_shop|^mart|shopping_mall|^medicine|^goods_|_goods|^sell_|^buy_)/.test(bankName)) return "b2-items";
+  if (/(?:^move_|^move_names|^ability|^abilities|^natures?$|^nature_names|^type_names|^type_)/.test(bankName)) return "b2-moves";
+  if (/(?:^species|^pokedex|^pokemon|^pokeparam|^egg_|^evolution|^form_names)/.test(bankName)) return "b2-pokemon";
+  if (/(?:^btl|^battle|^gym_|^pwt_|^black_tower|^white_treehollow|^battle_subway|_battle|^bsubway)/.test(bankName)) return "b2-battle";
+  if (/(?:^pokestar|^pokewood|^pkwd_|^musical|^medal|^join_avenue|^entree_|^festival|^fest_|^fmission|^cg_|^royal_unova|^movie|^dream_world)/.test(bankName)) return "b2-activities";
+  if (/(?:^wifi|^wfc|^gts|^gsync|^wireless|^union|^trade|^worldtrade|^comm_|^communication|^network|^cgear|^c_gear|^game_sync)/.test(bankName)) return "b2-network";
+  if (/(?:^menu|^startmenu|^title|^save|_save|^delete_save|^option|^system|^help|^error|^warning|^input|^box|^pc_|^town_map|^map_|^game_start|^settings|^status|^months|^place_names|^load_field_menu)/.test(bankName)) return "b2-menu";
+  if (/(?:^plasma|_plasma|^rival|^intro|^story|^ending|^credits|^event_|^scrcmd_plasma|^cutscene)/.test(bankName)) return "b2-story";
+  if (archive === "a/0/0/3") {
+    if (/(?:_city(?:_|$)|_town(?:_|$)|^black_city|^white_forest|pokemon_center|^aspertia|^virbank|^castelia|^nimbasa|^undella|^driftveil|^humilau|^opelucid|^lentimas|^floccesy|^icirrus|^striaton|^accumula|^nuvema|^lacunosa|^anville|^gear_station|^unity_tower)/.test(bankName)) return "b2-cities";
+    if (/(?:^route|_route|^road|^bridge|_bridge|^gate|_gate|^cave|_cave|^forest|_forest|^mountain|^desert|^lake|^woods|^ruins|_ruins|^giant_chasm|^chargestone|^victory_road|^seaside|^hidden_grotto|^abyssal|^relic|^pinwheel|^moor|^nature_preserve|^floccesy_ranch|^pledge_grove|^celestial_tower|^dreamyard)/.test(bankName)) return "b2-routes";
+    if (/^global_/.test(bankName)) return "b2-global";
+    return "b2-script-other";
+  }
+  return "b2-system-other";
 }

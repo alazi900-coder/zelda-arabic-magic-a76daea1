@@ -69,6 +69,8 @@ interface EditorBuildSectionProps {
   isPokemon?: boolean;
   /** Pokémon Platinum (NDS): rebuilds the message archive inside the .nds. */
   isPlatinum?: boolean;
+  /** Pokémon Black 2: export original JSON with translated arabic fields. */
+  isBlack2?: boolean;
   /** Inazuma Eleven (NDS): rewrites the script archives and patches the Arabic font. */
   isInazuma?: boolean;
   /** Pokémon Essentials/RPG Maker XP: editing/exporting translations only until a safe Marshal writer exists. */
@@ -178,6 +180,7 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
   isMetroidPrime = false,
   isPokemon = false,
   isPlatinum = false,
+  isBlack2 = false,
   isInazuma = false,
   isPokemonXp = false,
   isDragonSword = false,
@@ -1445,7 +1448,7 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
       {/* The same holds for every game that shapes and reverses at build time:
           running the editor's Arabic processing first reverses every line
           twice — measured: "متابعة" came out byte-for-byte backwards. */}
-      {!isRisen && !isMother3 && !isPokemon && !isPokemonXp && !isKingdomHearts && !isLumenTale && !isGtaIv && !isFe12 && !isPh && !isGoldenSun && unprocessedArabicCount > 0 && (
+      {!isRisen && !isMother3 && !isPokemon && !isPokemonXp && !isBlack2 && !isKingdomHearts && !isLumenTale && !isGtaIv && !isFe12 && !isPh && !isGoldenSun && unprocessedArabicCount > 0 && (
         <div className="mb-4 flex items-start gap-3 p-3 rounded-lg border border-secondary/40 bg-secondary/8">
           <AlertTriangle className="w-5 h-5 text-secondary shrink-0 mt-0.5" />
           <div className="flex-1 min-w-0">
@@ -1475,13 +1478,13 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
           size="lg"
           variant="secondary"
           onClick={() => setShowArabicProcessConfirm(true)}
-          disabled={editor.applyingArabic || isSteinsGate || isRisen || isMother3 || isPokemon || isPokemonXp || isKingdomHearts || isLumenTale || isGtaIv || isFe12 || isPh || isGoldenSun}
+          disabled={editor.applyingArabic || isSteinsGate || isRisen || isMother3 || isPokemon || isPokemonXp || isBlack2 || isKingdomHearts || isLumenTale || isGtaIv || isFe12 || isPh || isGoldenSun}
           className="flex-1 min-w-[200px] font-display font-bold"
-          title={isPokemonXp ? "لا تطبق المعالجة العامة على Pokémon XP قبل التحقق من الخط وباني Marshal." : isGtaIv ? "GTA IV يشكل العربية ويرمزها إلى خانات الخط عند البناء؛ لا تطبق المعالجة العامة هنا." : isFe12 ? "Fire Emblem 12 يشكل العربية ويرمزها إلى خانات الخط عند البناء؛ لا تطبق المعالجة العامة هنا." : isPh ? "Phantom Hourglass يشكّل العربية تلقائياً عند البناء؛ لا تطبق المعالجة العامة هنا." : isGoldenSun ? "Golden Sun يشكّل العربية ويرمزها إلى خانات الخط عند البناء؛ لا تطبق المعالجة العامة هنا." : isRisen ? "نصوص Risen تُشكَّل تلقائياً عند البناء — هذه المعالجة خاصة بـ Xenoblade وستُفسد النص" : undefined}
+          title={isBlack2 ? "Black 2 يحتاج نصوصًا عربية Unicode طبيعية داخل JSON، دون قلب أو تشكيل مُسبق." : isPokemonXp ? "لا تطبق المعالجة العامة على Pokémon XP قبل التحقق من الخط وباني Marshal." : isGtaIv ? "GTA IV يشكل العربية ويرمزها إلى خانات الخط عند البناء؛ لا تطبق المعالجة العامة هنا." : isFe12 ? "Fire Emblem 12 يشكل العربية ويرمزها إلى خانات الخط عند البناء؛ لا تطبق المعالجة العامة هنا." : isPh ? "Phantom Hourglass يشكّل العربية تلقائياً عند البناء؛ لا تطبق المعالجة العامة هنا." : isGoldenSun ? "Golden Sun يشكّل العربية ويرمزها إلى خانات الخط عند البناء؛ لا تطبق المعالجة العامة هنا." : isRisen ? "نصوص Risen تُشكَّل تلقائياً عند البناء — هذه المعالجة خاصة بـ Xenoblade وستُفسد النص" : undefined}
         >
           {editor.applyingArabic ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Sparkles className="w-4 h-4 mr-2" />} تطبيق المعالجة العربية ✨
         </Button>
-        <Button size="sm" variant="outline" onClick={editor.handleUndoArabicProcessing} disabled={editor.applyingArabic || isGtaIv || isFe12 || isPh || isGoldenSun || isPokemonXp} className="font-body gap-1 shrink-0" title={isPokemonXp ? "Pokémon XP لا يطبق المعالجة العامة على حالة المحرر." : isGtaIv ? "GTA IV لا يطبق المعالجة العامة على حالة المحرر." : isFe12 ? "Fire Emblem 12 لا يطبق المعالجة العامة على حالة المحرر." : isPh ? "Phantom Hourglass لا يطبق المعالجة العامة على حالة المحرر." : isGoldenSun ? "Golden Sun لا يطبق المعالجة العامة على حالة المحرر." : "التراجع عن المعالجة العربية"}>
+        <Button size="sm" variant="outline" onClick={editor.handleUndoArabicProcessing} disabled={editor.applyingArabic || isGtaIv || isFe12 || isPh || isGoldenSun || isPokemonXp || isBlack2} className="font-body gap-1 shrink-0" title={isBlack2 ? "Black 2 يُصدّر العربية الطبيعية كما هي." : isPokemonXp ? "Pokémon XP لا يطبق المعالجة العامة على حالة المحرر." : isGtaIv ? "GTA IV لا يطبق المعالجة العامة على حالة المحرر." : isFe12 ? "Fire Emblem 12 لا يطبق المعالجة العامة على حالة المحرر." : isPh ? "Phantom Hourglass لا يطبق المعالجة العامة على حالة المحرر." : isGoldenSun ? "Golden Sun لا يطبق المعالجة العامة على حالة المحرر." : "التراجع عن المعالجة العربية"}>
           <RotateCcw className="w-4 h-4" />
           <span className="hidden sm:inline">تراجع</span>
         </Button>
@@ -1509,7 +1512,7 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
               toast({ title: "✅ تم التصدير", description: `${Object.keys(processed).length} ترجمة بعد المعالجة العربية` })
             );
           }}
-          disabled={editor.applyingArabic || isSteinsGate || isGtaIv || isPokemonXp}
+          disabled={editor.applyingArabic || isSteinsGate || isGtaIv || isPokemonXp || isBlack2}
           className="font-body gap-1 shrink-0"
           title="تصدير الترجمات بعد تطبيق المعالجة العربية"
         >
@@ -1668,7 +1671,7 @@ const EditorBuildSection: React.FC<EditorBuildSectionProps> = ({
           </Button>
         ) : (
           <Button size="lg" onClick={editor.handlePreBuild} disabled={editor.building} className="flex-1 min-w-[200px] font-display font-bold">
-            {editor.building ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <FileDown className="w-4 h-4 mr-2" />} بناء الملف النهائي
+            {editor.building ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <FileDown className="w-4 h-4 mr-2" />} {isBlack2 ? "تصدير ملف Black 2 JSON كامل" : "بناء الملف النهائي"}
           </Button>
         )}
       </div>

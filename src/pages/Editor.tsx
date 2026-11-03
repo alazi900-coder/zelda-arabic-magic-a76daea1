@@ -806,6 +806,7 @@ const Editor = () => {
             isMetroidPrime={isMetroidPrimeEntries}
             isPokemon={isPokemonEntries}
             isPlatinum={isPlatinumEntries}
+            isBlack2={isBlack2Entries}
             isInazuma={isInazumaEntries}
             isPokemonXp={isPokemonXpEntries}
             isDragonSword={isDragonSwordEntries}

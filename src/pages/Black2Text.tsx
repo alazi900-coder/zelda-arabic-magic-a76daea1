@@ -35,7 +35,10 @@ export default function Black2Text() {
         const oldByKey = new Map(saved.entries.map(e => [e.msbtFile + ":" + e.index, e.original]));
         for (const e of entries) {
           const key = e.msbtFile + ":" + e.index;
-          if (oldByKey.get(key) === e.original && typeof saved.translations?.[key] === "string") {
+          // A translated incoming JSON is newer than the browser snapshot.
+          // Restore local work only when the imported arabic field is empty.
+          if (oldByKey.get(key) === e.original && !translations[key]?.trim()
+              && typeof saved.translations?.[key] === "string") {
             translations[key] = saved.translations[key];
           }
         }

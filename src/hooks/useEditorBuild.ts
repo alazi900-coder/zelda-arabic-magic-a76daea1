@@ -10,6 +10,7 @@ import { diffFormatSpecifiers } from "@/lib/format-specifier-guard";
 import { getEdgeFunctionUrl, getSupabaseHeaders } from "@/lib/supabase-edge";
 import { buildRisenOutputFromState } from "@/lib/risen-extractor";
 import { buildRisen3OutputFromState } from "@/lib/risen3-extractor";
+import { BLACK2_DOCUMENT_KEY, exportBlack2Json, type Black2JsonDocument } from "@/lib/pokemon-black2/black2-json";
 
 // Yields to the browser event loop for one frame so React can flush state updates (progress messages).
 const yieldToUI = () => new Promise<void>(r => setTimeout(r, 16));
@@ -58,9 +59,10 @@ interface UseEditorBuildProps {
  * format. Detected from the loaded entries themselves (same `.tab` heuristic
  * used everywhere else in the editor) rather than a passed-in flag, so this
  * never drifts out of sync with what's actually loaded. */
-export function detectGameType(entries: EditorState["entries"]): "xenoblade" | "risen" | "risen3" | "unknown" {
+export function detectGameType(entries: EditorState["entries"]): "xenoblade" | "risen" | "risen3" | "black2" | "unknown" {
   if (entries.length === 0) return "unknown";
   const f = entries[0]?.msbtFile || "";
+  if (f.startsWith("black2/")) return "black2";
   if (/\.gar3$/i.test(f)) return "risen3";
   if (/\.tab$/i.test(f)) return "risen";
   return "xenoblade";
@@ -130,6 +132,25 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
     // Force-save before preview too
     if (forceSaveRef?.current) {
       await forceSaveRef.current();
+    }
+
+    // Black 2 is a JSON-only workspace. Its source document lives in IndexedDB,
+    // not in the BDAT/MSBT binary stores used by the Xenoblade build pipeline.
+    if (detectGameType(currentState.entries) === "black2") {
+      const translated = currentState.entries.filter(entry => {
+        const value = currentState.translations[`${entry.msbtFile}:${entry.index}`];
+        return typeof value === "string" && !!value.trim() && value !== entry.original;
+      });
+      setBuildPreview({
+        totalTranslations: translated.length,
+        protectedCount: 0,
+        normalCount: translated.length,
+        categories: { "Pokémon Black 2": translated.length },
+        sampleKeys: translated.slice(0, 10).map(entry => `${entry.msbtFile}:${entry.index}`),
+        isJsonExport: true,
+      });
+      setShowBuildConfirm(true);
+      return;
     }
 
     const nonEmptyTranslations: Record<string, string> = {};
@@ -1300,6 +1321,37 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
     }
 
     const detected = detectGameType(currentState.entries);
+
+    if (detected === "black2") {
+      setBuilding(true);
+      setBuildProgress("جاري تصدير JSON الخاص بـ Pokémon Black 2...");
+      try {
+        const original = await idbGet<Black2JsonDocument>(BLACK2_DOCUMENT_KEY);
+        if (!original) {
+          throw new Error("ملف JSON الأصلي غير محفوظ. ارجع إلى قسم Black 2 وأعد استيراد ملف JSON.");
+        }
+        // Reuse the original complete document so every bank, id, metadata field,
+        // and message control token survives unchanged. Only "arabic" is updated.
+        const output = exportBlack2Json(original, currentState.entries, currentState.translations);
+        const blob = new Blob([JSON.stringify(output, null, 2)], { type: "application/json;charset=utf-8" });
+        const url = URL.createObjectURL(blob);
+        try {
+          const link = document.createElement("a");
+          link.href = url;
+          link.download = "Pokemon-Black-2-Arabic-Translated.json";
+          link.click();
+        } finally {
+          URL.revokeObjectURL(url);
+        }
+        const translatedCount = output.entries.filter(row => row.arabic.trim() && row.arabic !== row.source).length;
+        setBuildProgress(`✅ تم تصدير JSON الأصلي مع ${translatedCount} ترجمة في حقل arabic، دون تعديل بقية الحقول أو طلب ملفات BDAT.`);
+      } catch (error) {
+        setBuildProgress(`❌ ${error instanceof Error ? error.message : "فشل تصدير ملف Black 2"}`);
+      } finally {
+        setBuilding(false);
+      }
+      return;
+    }
 
     if (detected === "xenoblade") {
       return handleBuildXenoblade();

@@ -22,6 +22,8 @@ export interface BuildPreview {
   hasBdatFiles?: boolean;
   isDemo?: boolean;
   affectedFileCount?: number;
+  /** Black 2 exports the original JSON document; no ROM/BDAT build is involved. */
+  isJsonExport?: boolean;
 }
 
 interface BuildConfirmDialogProps {
@@ -35,16 +37,16 @@ interface BuildConfirmDialogProps {
 const BuildConfirmDialog = ({ open, onOpenChange, preview, onConfirm, building }: BuildConfirmDialogProps) => {
   if (!preview) return null;
 
-  const hasWarnings = (preview.overflowCount || 0) > 0 || (preview.unprocessedArabicCount || 0) > 0 || (preview.missingClosingTagCount || 0) > 0 || preview.isDemo;
-  const hasCritical = (preview.overflowCount || 0) > 0 || (preview.missingClosingTagCount || 0) > 0 || preview.isDemo;
+  const hasWarnings = !preview.isJsonExport && ((preview.overflowCount || 0) > 0 || (preview.unprocessedArabicCount || 0) > 0 || (preview.missingClosingTagCount || 0) > 0 || !!preview.isDemo);
+  const hasCritical = !preview.isJsonExport && ((preview.overflowCount || 0) > 0 || (preview.missingClosingTagCount || 0) > 0 || !!preview.isDemo);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md" dir="rtl">
         <DialogHeader>
-          <DialogTitle className="font-display text-lg">تأكيد البناء 🏗️</DialogTitle>
+          <DialogTitle className="font-display text-lg">{preview.isJsonExport ? "تأكيد تصدير JSON — Pokémon Black 2" : "تأكيد البناء 🏗️"}</DialogTitle>
           <DialogDescription className="font-body text-sm">
-            مراجعة الترجمات التي ستُرسل للبناء
+            {preview.isJsonExport ? "تصدير نفس بنية الملف الأصلي مع وضع الترجمات داخل حقل arabic فقط، دون بناء روم NDS." : "مراجعة الترجمات التي ستُرسل للبناء"}
           </DialogDescription>
         </DialogHeader>
 
@@ -52,7 +54,7 @@ const BuildConfirmDialog = ({ open, onOpenChange, preview, onConfirm, building }
           {/* Total count */}
           <div className="text-center p-4 rounded-lg bg-primary/10 border border-primary/20">
             <p className="text-3xl font-display font-bold text-primary">{preview.totalTranslations}</p>
-            <p className="text-sm text-muted-foreground font-body">ترجمة ستُرسل للبناء</p>
+            <p className="text-sm text-muted-foreground font-body">{preview.isJsonExport ? "ترجمة ستُكتب في JSON" : "ترجمة ستُرسل للبناء"}</p>
           </div>
 
           {/* Breakdown */}
@@ -68,7 +70,13 @@ const BuildConfirmDialog = ({ open, onOpenChange, preview, onConfirm, building }
           </div>
 
           {/* File info */}
-          {preview.hasBdatFiles !== undefined && (
+          {preview.isJsonExport && (
+            <div className="flex items-center gap-2 text-xs font-body px-2 py-1.5 rounded bg-muted/50">
+              <CheckCircle2 className="w-3.5 h-3.5 text-secondary shrink-0" />
+              <span>لا حاجة لملفات BDAT أو NDS؛ ستبقى البنوك والمعرّفات ووسوم التحكم كما هي.</span>
+            </div>
+          )}
+          {!preview.isJsonExport && preview.hasBdatFiles !== undefined && (
             <div className="flex items-center gap-2 text-xs font-body px-2 py-1.5 rounded bg-muted/50">
               {preview.hasBdatFiles ? (
                 <>
@@ -137,7 +145,7 @@ const BuildConfirmDialog = ({ open, onOpenChange, preview, onConfirm, building }
           {!hasWarnings && preview.totalTranslations > 0 && (
             <div className="flex items-center gap-2 text-xs font-body p-2 rounded border border-secondary/30 bg-secondary/5">
               <CheckCircle2 className="w-3.5 h-3.5 text-secondary shrink-0" />
-              <span className="font-bold text-secondary">✅ جاهز للبناء — لا توجد تحذيرات</span>
+              <span className="font-bold text-secondary">{preview.isJsonExport ? "✅ جاهز لتصدير ملف JSON" : "✅ جاهز للبناء — لا توجد تحذيرات"}</span>
             </div>
           )}
 
@@ -172,7 +180,7 @@ const BuildConfirmDialog = ({ open, onOpenChange, preview, onConfirm, building }
           </Button>
           <Button onClick={onConfirm} disabled={building || preview.totalTranslations === 0} className="font-display font-bold">
             {building ? <Loader2 className="w-4 h-4 animate-spin ml-2" /> : <FileDown className="w-4 h-4 ml-2" />}
-            {hasCritical ? 'بناء مع تحذيرات ⚠️' : 'بناء الملف'}
+            {preview.isJsonExport ? "تصدير ملف JSON" : hasCritical ? "بناء مع تحذيرات ⚠️" : "بناء الملف"}
           </Button>
         </DialogFooter>
       </DialogContent>

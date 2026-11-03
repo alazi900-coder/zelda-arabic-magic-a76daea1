@@ -4,6 +4,7 @@ import { resolveGameParam } from "@/lib/game-param";
 import { getProfileBuiltinRules } from "@/lib/enhance-rules";
 import { detectIssues } from "@/lib/diagnostic-detect";
 import { validateBlack2Translation } from "@/lib/pokemon-black2/black2-json";
+import { detectGameType } from "@/hooks/useEditorBuild";
 
 const sample = {
   msbtFile: "black2/a/0/0/2/bank_8/section_0",
@@ -15,6 +16,7 @@ const sample = {
 
 describe("Pokémon Black 2: QA + AI integration", () => {
   it("resolves the game's identity without falling through to Xenoblade", () => {
+    expect(detectGameType([sample])).toBe("black2");
     expect(resolveGameParam(sample.msbtFile)).toBe("black2");
     expect(resolveAiGameProfile(sample.msbtFile)).toBe("black2");
     expect(profileDefaultPrompt("black2")).toContain("[CTRL:...]");

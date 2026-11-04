@@ -1,5 +1,6 @@
 import type { ExtractedEntry } from "@/components/editor/types";
 import { black2EntryKeyFromId, validateBlack2Translation } from "./black2-json";
+import { black2CompactBankName } from "./black2-compact-banks";
 
 /**
  * The compact English-only export contains metadata + entries [{ id, english }].
@@ -89,11 +90,15 @@ export function parseBlack2EnglishOnlyJson(text: string): {
 
     const index = Number(row.id.split(":")[3]);
     const fileKey = key.slice(0, key.lastIndexOf(":"));
+    const [archive, bank] = row.id.split(":");
+    const bankName = black2CompactBankName(archive, Number(bank));
     entries.push({
       msbtFile: fileKey,
       index,
       original: row.english,
-      label: row.id.split(":")[0] + " · " + row.id,
+      // The compact on-disk format has no bank_name field. Resolve the
+      // original bank's label only in memory, keeping the JSON untouched.
+      label: (bankName ?? archive) + " · " + row.id,
       maxBytes: 65535, // JSON-only; no guessed NDS ROM message-size limit.
     });
     if (arabic.trim()) translations[key] = arabic;

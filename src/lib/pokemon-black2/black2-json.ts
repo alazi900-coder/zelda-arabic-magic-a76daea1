@@ -1,4 +1,5 @@
 import type { ExtractedEntry, FileCategory } from "@/components/editor/types";
+import { black2CompactBankNameFromEditorPath } from "./black2-compact-banks";
 
 /** Pokémon Black 2's extracted, round-trip-safe JSON schema (not a Platinum NARC). */
 export const BLACK2_SOURCE_GAME = "black2";
@@ -154,7 +155,13 @@ export const BLACK2_CATEGORIES: FileCategory[] = [
   { id: "b2-items", label: "الأدوات والحقيبة والمتاجر", emoji: "🎒", icon: "Backpack", color: "text-amber-400" },
   { id: "b2-menu", label: "القوائم والحفظ والنظام", emoji: "⚙️", icon: "Settings", color: "text-sky-400" },
   { id: "b2-network", label: "الاتصال والتبادل", emoji: "🌐", icon: "Globe", color: "text-teal-400" },
-  { id: "b2-activities", label: "الأنشطة والمسابقات والميداليات", emoji: "🎬", icon: "Clapperboard", color: "text-pink-400" },
+  { id: "b2-activities", label: "أنشطة وفعاليات أخرى", emoji: "🎬", icon: "Clapperboard", color: "text-pink-400" },
+  { id: "b2-pokewood-scripts", label: "بوكيوود — حوارات الأفلام", emoji: "🎞️", icon: "Clapperboard", color: "text-pink-400" },
+  { id: "b2-pokewood-briefings", label: "بوكيوود — مقدمات الأفلام", emoji: "📜", icon: "ScrollText", color: "text-violet-400" },
+  { id: "b2-pokewood-other", label: "استوديو بوكيوود ونصوصه", emoji: "🎥", icon: "Clapperboard", color: "text-indigo-400" },
+  { id: "b2-medals", label: "الميداليات وأسماؤها", emoji: "🏅", icon: "Gem", color: "text-amber-400" },
+  { id: "b2-musical", label: "المسرحيات الموسيقية", emoji: "🎭", icon: "Drama", color: "text-rose-400" },
+  { id: "b2-credits", label: "اعتمادات اللعبة وأسماء المطورين", emoji: "👥", icon: "Users", color: "text-slate-400" },
   { id: "b2-words", label: "الكلمات والعبارات الجاهزة", emoji: "📝", icon: "MessageSquare", color: "text-orange-400" },
   { id: "b2-script-other", label: "حوارات أماكن أخرى", emoji: "📍", icon: "Map", color: "text-blue-400" },
   { id: "b2-system-other", label: "بنوك النظام غير المصنفة", emoji: "🗃️", icon: "FolderOpen", color: "text-slate-400" },
@@ -164,10 +171,25 @@ export const BLACK2_CATEGORIES: FileCategory[] = [
 /** Classify from the bank name and the original NARC archive, not translated text. */
 export function categorizeBlack2Entry(entry: ExtractedEntry): string {
   if (!entry.msbtFile.startsWith(BLACK2_PREFIX)) return "b2-system-other";
-  const bankName = entry.label.split(" · ")[0].toLowerCase();
+  const labelBankName = entry.label.split(" · ")[0].toLowerCase();
+  // Previously saved compact sessions have generic archive labels. Resolve
+  // by archive/bank ID so the new filters work without re-importing the file.
+  const bankName = /^a\/\d+\/\d+\/\d+$/.test(labelBankName)
+    ? black2CompactBankNameFromEditorPath(entry.msbtFile) ?? labelBankName
+    : labelBankName;
   const archive = entry.msbtFile.slice(BLACK2_PREFIX.length).split("/bank_")[0];
 
   if (archive !== "a/0/0/2" && archive !== "a/0/0/3") return "b2-additional";
+  // Bank-specific filters, not inferred from the wording of translated text.
+  if (/^pkwd_book_movie_\d+_(?:boy|girl)$/.test(bankName)) return "b2-pokewood-scripts";
+  if (/^pkwd_briefing_movie_\d+$/.test(bankName)) return "b2-pokewood-briefings";
+  if (/^(?:pkwd_briefing_common|pokewood_lines|pokestar_studios(?:_\d+)?)$/.test(bankName)) return "b2-pokewood-other";
+  if (/^medal_/.test(bankName)) return "b2-medals";
+  if (/^musical_/.test(bankName)) return "b2-musical";
+  if (bankName === "title_15") return "b2-credits";
+  if (bankName === "cg_help") return "b2-network";
+  if (bankName === "event_phrase_input") return "b2-words";
+  if (bankName === "gender_choice_ui") return "b2-menu";
   if (/(?:^|_)trainer(?:_|s\b)|trainer_class|trainer_names|trainer_messages|gym_leader|elite_four|champion_names|treehollow_trainer/.test(bankName)) return "b2-trainers";
   if (/(?:^pms_|^easy_chat|^questionnaire|^hobbies|^job_answers|^event_phrase|^words_|_word_set|^word_set|^greetings|^phrase_)/.test(bankName)) return "b2-words";
   if (/(?:^item|^bag_|_bag_|^bag$|^berry|^shop|_shop|^mart|shopping_mall|^medicine|^goods_|_goods|^sell_|^buy_)/.test(bankName)) return "b2-items";

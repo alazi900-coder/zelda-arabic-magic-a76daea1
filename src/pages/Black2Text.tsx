@@ -8,6 +8,10 @@ import {
   BLACK2_DOCUMENT_KEY, BLACK2_SOURCE_GAME, exportBlack2Json, parseBlack2Json,
   type Black2JsonDocument,
 } from "@/lib/pokemon-black2/black2-json";
+import {
+  exportBlack2EnglishOnlyJson, isBlack2EnglishOnlyDocument, parseBlack2EnglishOnlyJson,
+  type Black2EnglishOnlyDocument,
+} from "@/lib/pokemon-black2/black2-english-only";
 
 /** JSON-only translation workspace. ROM insertion is deliberately not claimed. */
 export default function Black2Text() {
@@ -27,7 +31,11 @@ export default function Black2Text() {
     if (!/\.json$/i.test(file.name)) { toast.error("اختر ملف JSON الخاص بـ Pokémon Black 2"); return; }
     setBusy(true);
     try {
-      const { document, entries, translations } = parseBlack2Json(await readJsonFile(file));
+      const raw = await readJsonFile(file);
+      const parsed = JSON.parse(raw.replace(/^\uFEFF/, "")) as unknown;
+      const { document, entries, translations } = isBlack2EnglishOnlyDocument(parsed)
+        ? parseBlack2EnglishOnlyJson(raw)
+        : parseBlack2Json(raw);
       const saved = await idbGet<{ entries: ExtractedEntry[]; translations: Record<string, string> }>(
         "editorState:black2"
       );
@@ -42,6 +50,17 @@ export default function Black2Text() {
             translations[key] = saved.translations[key];
           }
         }
+      }
+      // Importing a different Black 2 catalog (for example 52,636-row banks
+      // versus the 8,684-row English-only file) must not erase prior work.
+      const priorDoc = await idbGet<Black2JsonDocument | Black2EnglishOnlyDocument>(BLACK2_DOCUMENT_KEY);
+      if (saved?.entries?.length && priorDoc &&
+          (saved.entries.length !== entries.length ||
+            saved.entries.some((item, i) => item.msbtFile !== entries[i].msbtFile ||
+              item.index !== entries[i].index || item.original !== entries[i].original))) {
+        await idbSet("pokemonBlack2:catalogBackup:" + Date.now(), {
+          document: priorDoc, snapshot: saved,
+        });
       }
       // Guard the existing shared editor session before switching games.
       const previousSource = await idbGet<string>("editor-source-game");
@@ -67,13 +86,15 @@ export default function Black2Text() {
   const downloadJson = async () => {
     setBusy(true);
     try {
-      const doc = await idbGet<Black2JsonDocument>(BLACK2_DOCUMENT_KEY);
+      const doc = await idbGet<Black2JsonDocument | Black2EnglishOnlyDocument>(BLACK2_DOCUMENT_KEY);
       const activeGame = await idbGet<string>("editor-source-game");
       const snapshot = activeGame === BLACK2_SOURCE_GAME
         ? await idbGet<{ entries: ExtractedEntry[]; translations: Record<string, string> }>("editorState")
         : await idbGet<{ entries: ExtractedEntry[]; translations: Record<string, string> }>("editorState:black2");
       if (!doc || !snapshot?.entries?.length) throw new Error("ارفع JSON أولًا وافتحه في المحرر");
-      const output = exportBlack2Json(doc, snapshot.entries, snapshot.translations || {});
+      const output = isBlack2EnglishOnlyDocument(doc)
+        ? exportBlack2EnglishOnlyJson(doc, snapshot.entries, snapshot.translations || {})
+        : exportBlack2Json(doc, snapshot.entries, snapshot.translations || {});
       const blob = new Blob([JSON.stringify(output, null, 2)], { type: "application/json;charset=utf-8" });
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement("a");
@@ -92,8 +113,8 @@ export default function Black2Text() {
   return (
     <div className="min-h-screen bg-background text-foreground" dir="rtl">
       <main className="mx-auto max-w-3xl px-4 py-10">
-        <Link to="/platinum/text" className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground">
-          <ArrowRight className="h-4 w-4" /> العودة إلى Pokémon Platinum
+        <Link to="/games/black2" className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground">
+          <ArrowRight className="h-4 w-4" /> العودة إلى مشروع Pokémon Black 2
         </Link>
         <div className="my-8 rounded-2xl border bg-gradient-to-bl from-slate-900 to-blue-950 p-7 text-white shadow-xl">
           <span className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-sm">
@@ -101,7 +122,8 @@ export default function Black2Text() {
           </span>
           <h1 className="mt-5 text-3xl font-black">Pokémon Black 2</h1>
           <p className="mt-3 leading-7 text-slate-200">
-            استيراد ملف JSON الكامل، تحرير النصوص في المحرر المشترك، وحفظ الترجمات بعيدًا عن Pokémon Platinum.
+            مساحة مستقلة لملفات Black 2 وترجماتها وقواعدها. افتح ملف النصوص الإنجليزية المرفق،
+            أو صيغة البنوك القديمة، ثم ترجم النصوص وصدّرها بالبنية التي استوردتها.
           </p>
         </div>
         <label
@@ -111,8 +133,8 @@ export default function Black2Text() {
           className={"flex cursor-pointer flex-col items-center gap-3 rounded-xl border-2 border-dashed p-10 text-center transition " + (dragOver ? "border-primary bg-primary/5" : "border-muted")}
         >
           {busy ? <Loader2 className="h-9 w-9 animate-spin" /> : <Upload className="h-9 w-9 text-primary" />}
-          <strong>ارفع Pokemon-Black-2-English-Translatable-Texts.json</strong>
-          <span className="text-sm text-muted-foreground">ملفك الصحيح: 52,636 نصًا موزعة على 918 بنكًا • بطاقات فلاتر مستقلة في المحرر</span>
+          <strong>ارفع ملف Pokémon Black 2 بصيغة JSON</strong>
+          <span className="text-sm text-muted-foreground">يدعم ملفك المرفق الذي يحتوي 8,684 نصًا مع metadata / entries / id / english، وكذلك ملف البنوك الكامل السابق.</span>
           <input type="file" accept=".json,application/json" disabled={busy} className="hidden"
             onChange={e => { const f = e.target.files?.[0]; if (f) void loadFile(f); e.target.value = ""; }} />
         </label>
@@ -123,8 +145,10 @@ export default function Black2Text() {
         <div className="mt-7 space-y-3 rounded-xl border p-5 text-sm text-muted-foreground">
           <p className="flex items-center gap-2 font-bold text-foreground"><FileJson2 className="h-5 w-5" /> قواعد الحماية</p>
           <p>تُقارن أوامر <code dir="ltr">[CTRL:...]</code> و<code dir="ltr">[CHAR:...]</code> حرفيًا وبالترتيب. يُرفض حفظ أي ترجمة تحذفها أو تغيّر فواصل الأسطر.</p>
-          <p>لا يُعدّل التصدير سوى حقل <code>arabic</code>. تبقى بيانات <code>metadata</code> و<code>banks</code> والمعرّفات والمراجع وحقول الضغط كما هي. السطر ذو الترجمة الفارغة يبقى دون تغيير.</p>
-          <p>النتيجة ملف JSON صالح للاستيراد في أدوات إعادة تركيب Black 2 المتوافقة. هذه الصفحة لا تعيد بناء ملف NDS تلقائيًا ولا تستخدم باني Platinum.</p>
+          <p>يحافظ التصدير على <code>metadata</code> و<code>entries</code> والمعرّفات وحقول <code>english</code> وترتيبها.
+             في صيغة النصوص الإنجليزية، لا يُضاف حقل <code>arabic</code> إلا للمدخلات المترجمة؛ وتبقى المدخلات الفارغة على بنيتها الأصلية.
+             وفي صيغة البنوك القديمة، تبقى <code>banks</code> وبقية البيانات التقنية كما هي.</p>
+          <p>يُصدَّر JSON بنفس تنسيق الملف المستورد، ويمكن استيراده مرة ثانية لمواصلة الترجمة. لا تعيد هذه الصفحة بناء روم NDS ولا تستخدم أدوات بناء Platinum.</p>
         </div>
       </main>
     </div>

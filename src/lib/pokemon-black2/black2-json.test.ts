@@ -69,7 +69,7 @@ describe("Pokémon Black 2 JSON safety", () => {
       ["a/0/0/2", "battle_subway_trainer_messages", "b2-trainers"],
       ["a/0/0/2", "pokedex_entries_en", "b2-pokemon"],
       ["a/0/0/2", "move_names_upper", "b2-moves"],
-      ["a/0/0/2", "pkwd_book_movie_00_girl", "b2-activities"],
+      ["a/0/0/2", "pkwd_book_movie_00_girl", "b2-pokewood-scripts"],
       ["a/0/0/2", "0060", "b2-system-other"],
       ["a/0/0/3", "global_10480", "b2-global"],
       ["a/0/0/3", "castelia_city_13", "b2-cities"],

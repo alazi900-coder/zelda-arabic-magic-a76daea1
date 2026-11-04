@@ -122,6 +122,7 @@ const App = () => (
                 <Route path="/pokemon/font" element={<ErrorBoundary fallbackTitle="خطأ في أداة خط Pokémon Ruby Destiny"><PokemonFont /></ErrorBoundary>} />
                 <Route path="/pokemon/text" element={<ErrorBoundary fallbackTitle="خطأ في أداة نصوص Pokémon Ruby Destiny"><PokemonText /></ErrorBoundary>} />
                 <Route path="/platinum/text" element={<ErrorBoundary fallbackTitle="خطأ في أداة نصوص Pokémon Platinum"><PlatinumText /></ErrorBoundary>} />
+                <Route path="/black2/text" element={<ErrorBoundary fallbackTitle="خطأ في محرر Pokémon Black 2"><Black2Text /></ErrorBoundary>} />
                 <Route path="/platinum/black2" element={<ErrorBoundary fallbackTitle="خطأ في محرر Pokémon Black 2"><Black2Text /></ErrorBoundary>} />
                 <Route path="/pokemon-unbreakable-ties" element={<ErrorBoundary fallbackTitle="خطأ في نصوص Pokémon Unbreakable Ties"><PokemonUnbreakableTies /></ErrorBoundary>} />
                 <Route path="/mother3" element={<ErrorBoundary fallbackTitle="خطأ في أداة Mother 3"><Mother3 /></ErrorBoundary>} />

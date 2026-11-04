@@ -11,6 +11,7 @@ import { getEdgeFunctionUrl, getSupabaseHeaders } from "@/lib/supabase-edge";
 import { buildRisenOutputFromState } from "@/lib/risen-extractor";
 import { buildRisen3OutputFromState } from "@/lib/risen3-extractor";
 import { BLACK2_DOCUMENT_KEY, exportBlack2Json, type Black2JsonDocument } from "@/lib/pokemon-black2/black2-json";
+import { exportBlack2EnglishOnlyJson, isBlack2EnglishOnlyDocument, type Black2EnglishOnlyDocument } from "@/lib/pokemon-black2/black2-english-only";
 
 // Yields to the browser event loop for one frame so React can flush state updates (progress messages).
 const yieldToUI = () => new Promise<void>(r => setTimeout(r, 16));
@@ -1326,13 +1327,15 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
       setBuilding(true);
       setBuildProgress("جاري تصدير JSON الخاص بـ Pokémon Black 2...");
       try {
-        const original = await idbGet<Black2JsonDocument>(BLACK2_DOCUMENT_KEY);
+        const original = await idbGet<Black2JsonDocument | Black2EnglishOnlyDocument>(BLACK2_DOCUMENT_KEY);
         if (!original) {
           throw new Error("ملف JSON الأصلي غير محفوظ. ارجع إلى قسم Black 2 وأعد استيراد ملف JSON.");
         }
         // Reuse the original complete document so every bank, id, metadata field,
         // and message control token survives unchanged. Only "arabic" is updated.
-        const output = exportBlack2Json(original, currentState.entries, currentState.translations);
+        const output = isBlack2EnglishOnlyDocument(original)
+          ? exportBlack2EnglishOnlyJson(original, currentState.entries, currentState.translations)
+          : exportBlack2Json(original, currentState.entries, currentState.translations);
         const blob = new Blob([JSON.stringify(output, null, 2)], { type: "application/json;charset=utf-8" });
         const url = URL.createObjectURL(blob);
         try {
@@ -1343,7 +1346,11 @@ export function useEditorBuild({ state, setState, setLastSaved, arabicNumerals, 
         } finally {
           URL.revokeObjectURL(url);
         }
-        const translatedCount = output.entries.filter(row => row.arabic.trim() && row.arabic !== row.source).length;
+        const translatedCount = currentState.entries.filter(entry => {
+          const key = entry.msbtFile + ":" + entry.index;
+          const value = currentState.translations[key];
+          return typeof value === "string" && !!value.trim() && value !== entry.original;
+        }).length;
         setBuildProgress(`✅ تم تصدير JSON الأصلي مع ${translatedCount} ترجمة في حقل arabic، دون تعديل بقية الحقول أو طلب ملفات BDAT.`);
       } catch (error) {
         setBuildProgress(`❌ ${error instanceof Error ? error.message : "فشل تصدير ملف Black 2"}`);

@@ -222,7 +222,7 @@ const Editor = () => {
   // entries, not just default to Xenoblade's /process for every game that
   // isn't Risen (Mother 3 and Metroid Prime were falling through to it).
   const processPath = isBlack2Entries
-    ? "/platinum/black2"
+    ? "/black2/text"
     : isMother3Entries
     ? "/mother3"
     : isMetroidPrimeEntries
